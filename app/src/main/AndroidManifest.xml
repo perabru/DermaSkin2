@@ -20,8 +20,12 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:usesCleartextTraffic="true"
-        android:theme="@style/Theme.DermaSkin2">
+        android:theme="@style/Theme.DermaSkin2"
+        android:usesCleartextTraffic="true">
+
+        <activity
+            android:name=".AnaliseActivity"
+            android:exported="false" />
 
         <activity
             android:name=".MainActivity"
@@ -29,7 +33,6 @@
 
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 

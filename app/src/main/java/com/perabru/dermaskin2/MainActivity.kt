@@ -1,979 +1,270 @@
 package com.perabru.dermaskin2
 
-import android.Manifest
-import android.annotation.SuppressLint
-import android.app.AlertDialog
-import android.content.pm.PackageManager
-import android.graphics.Bitmap
-import android.graphics.Canvas
-import android.graphics.Color
-import android.graphics.Paint
-import android.graphics.Typeface
-import android.graphics.pdf.PdfDocument
+import android.content.Intent
 import android.os.Bundle
-import android.util.Base64
+import android.util.Patterns
 import android.view.View
-import android.webkit.JavascriptInterface
-import android.webkit.WebChromeClient
-import android.webkit.WebView
 import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
-import android.widget.ImageView
-import android.widget.LinearLayout
 import android.widget.ProgressBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
-import androidx.core.content.ContextCompat
-import org.json.JSONArray
-import java.io.ByteArrayOutputStream
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import kotlin.math.PI
-import kotlin.math.abs
-import kotlin.math.roundToInt
-import kotlin.math.sqrt
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.FirebaseDatabase
 
 class MainActivity : AppCompatActivity() {
 
-    private lateinit var imgPreview: ImageView
-    private lateinit var btnCamera: Button
-    private lateinit var btnAnalyze: Button
-    private lateinit var btnExportPdf: Button
-    private lateinit var progress: ProgressBar
-    private lateinit var resultCard: LinearLayout
-    private lateinit var txtRiskTitle: TextView
-    private lateinit var txtPercentage: TextView
-    private lateinit var txtDescription: TextView
-    private lateinit var txtClasses: TextView
-    private lateinit var txtABCDE: TextView
-    private lateinit var webViewIA: WebView
-    private lateinit var edtDiameter: EditText
-    private lateinit var checkEvolution: CheckBox
+    private lateinit var auth: FirebaseAuth
 
-    private var currentBitmap: Bitmap? = null
-    private var modelLoaded = false
+    private lateinit var txtMode: TextView
+    private lateinit var edtName: EditText
+    private lateinit var edtEmail: EditText
+    private lateinit var edtPassword: EditText
+    private lateinit var checkTerms: CheckBox
+    private lateinit var btnRegister: Button
+    private lateinit var btnLogin: Button
+    private lateinit var progressBar: ProgressBar
 
-    private var lastCancerPercent = 0.0
-    private var lastNaoCancerPercent = 0.0
-    private var lastRiskTitle = ""
-    private var lastDescription = ""
-    private var lastClasses = ""
-    private var lastAbcdeReport = ""
-    private var lastSizeReport = ""
+    private var isLoginMode = false
 
-    private var lastDiameterMm: Double? = null
-    private var lastEstimatedAreaMm2: Double? = null
-    private var lastEstimatedAreaPixels = 0
-    private var lastEstimatedImagePercent = 0.0
-    private var lastEstimatedPixelDiameter = 0.0
-
-    private var pendingPdfBytes: ByteArray? = null
-
-    private val createPdfLauncher =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("application/pdf")) { uri ->
-            if (uri != null) {
-                try {
-                    val bytes = pendingPdfBytes
-
-                    if (bytes == null) {
-                        Toast.makeText(this, "Nenhum PDF foi gerado.", Toast.LENGTH_LONG).show()
-                        return@registerForActivityResult
-                    }
-
-                    contentResolver.openOutputStream(uri)?.use { outputStream ->
-                        outputStream.write(bytes)
-                    }
-
-                    Toast.makeText(
-                        this,
-                        "Relatório PDF salvo com sucesso!",
-                        Toast.LENGTH_LONG
-                    ).show()
-
-                } catch (e: Exception) {
-                    Toast.makeText(
-                        this,
-                        "Erro ao salvar PDF: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
-                }
-            }
-        }
-
-    private val cameraPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-            if (granted) {
-                openCamera()
-            } else {
-                showError("Permissão da câmera negada.")
-            }
-        }
-
-    private val cameraLauncher =
-        registerForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-            if (bitmap != null) {
-                currentBitmap = bitmap
-                imgPreview.setImageBitmap(bitmap)
-                btnAnalyze.isEnabled = modelLoaded
-                btnExportPdf.isEnabled = false
-                resultCard.visibility = View.GONE
-            } else {
-                showError("Nenhuma imagem foi capturada.")
-            }
-        }
-
-    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        imgPreview = findViewById(R.id.imgPreview)
-        btnCamera = findViewById(R.id.btnCamera)
-        btnAnalyze = findViewById(R.id.btnAnalyze)
-        btnExportPdf = findViewById(R.id.btnExportPdf)
-        progress = findViewById(R.id.progress)
-        resultCard = findViewById(R.id.resultCard)
-        txtRiskTitle = findViewById(R.id.txtRiskTitle)
-        txtPercentage = findViewById(R.id.txtPercentage)
-        txtDescription = findViewById(R.id.txtDescription)
-        txtClasses = findViewById(R.id.txtClasses)
-        txtABCDE = findViewById(R.id.txtABCDE)
-        webViewIA = findViewById(R.id.webViewIA)
-        edtDiameter = findViewById(R.id.edtDiameter)
-        checkEvolution = findViewById(R.id.checkEvolution)
+        auth = FirebaseAuth.getInstance()
 
-        btnAnalyze.isEnabled = false
-        btnExportPdf.isEnabled = false
+        txtMode = findViewById(R.id.txtMode)
+        edtName = findViewById(R.id.edtName)
+        edtEmail = findViewById(R.id.edtEmail)
+        edtPassword = findViewById(R.id.edtPassword)
+        checkTerms = findViewById(R.id.checkTerms)
+        btnRegister = findViewById(R.id.btnRegister)
+        btnLogin = findViewById(R.id.btnLogin)
+        progressBar = findViewById(R.id.progressBar)
 
-        setupWebViewIA()
+        progressBar.visibility = View.GONE
 
-        btnCamera.setOnClickListener {
-            showPhotoInstructionDialog()
+        if (auth.currentUser != null) {
+            openAnaliseScreen()
         }
 
-        btnAnalyze.setOnClickListener {
-            val bitmap = currentBitmap
-
-            if (bitmap == null) {
-                showError("Tire uma foto antes de analisar.")
-                return@setOnClickListener
-            }
-
-            if (!modelLoaded) {
-                showError("A IA ainda está carregando. Aguarde alguns segundos e tente novamente.")
-                return@setOnClickListener
-            }
-
-            analyzeImage(bitmap)
-        }
-
-        btnExportPdf.setOnClickListener {
-            exportPdfReport()
-        }
-    }
-
-    private fun showPhotoInstructionDialog() {
-        AlertDialog.Builder(this)
-            .setTitle("Foto ideal para análise")
-            .setMessage(
-                "Para uma análise mais confiável, segure o celular a aproximadamente 10 cm da pele.\n\n" +
-                        "Use boa iluminação, evite sombras, mantenha a câmera firme e tente centralizar bem a mancha na imagem.\n\n" +
-                        "Evite flash direto, pois ele pode alterar a cor da lesão."
-            )
-            .setPositiveButton("Entendi, tirar foto") { _, _ ->
-                checkCameraPermission()
-            }
-            .setNegativeButton("Cancelar", null)
-            .show()
-    }
-
-    private fun checkCameraPermission() {
-        val permission = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA
-        )
-
-        if (permission == PackageManager.PERMISSION_GRANTED) {
-            openCamera()
-        } else {
-            cameraPermissionLauncher.launch(Manifest.permission.CAMERA)
-        }
-    }
-
-    private fun openCamera() {
-        cameraLauncher.launch(null)
-    }
-
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebViewIA() {
-        webViewIA.settings.javaScriptEnabled = true
-        webViewIA.settings.domStorageEnabled = true
-        webViewIA.settings.allowFileAccess = true
-        webViewIA.settings.allowContentAccess = true
-        webViewIA.webChromeClient = WebChromeClient()
-        webViewIA.addJavascriptInterface(IAResultBridge(), "Android")
-
-        val html = """
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="UTF-8">
-                <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-                <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-                <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
-            </head>
-
-            <body>
-                <img id="image" width="224" height="224" />
-
-                <script>
-                    const URL_MODELO = "https://teachablemachine.withgoogle.com/models/zceGA0QO5/";
-
-                    let model = null;
-                    let isLoaded = false;
-
-                    async function loadModel() {
-                        try {
-                            const modelURL = URL_MODELO + "model.json";
-                            const metadataURL = URL_MODELO + "metadata.json";
-
-                            model = await tmImage.load(modelURL, metadataURL);
-                            isLoaded = true;
-
-                            Android.onModelLoaded("Modelo carregado com sucesso.");
-                        } catch (error) {
-                            Android.onError("Erro ao carregar o modelo: " + error);
-                        }
-                    }
-
-                    async function predictImage(base64Image) {
-                        try {
-                            if (!isLoaded || model === null) {
-                                Android.onError("Modelo ainda não carregado.");
-                                return;
-                            }
-
-                            const img = document.getElementById("image");
-
-                            img.onload = async function () {
-                                try {
-                                    const prediction = await model.predict(img);
-                                    Android.onResult(JSON.stringify(prediction));
-                                } catch (error) {
-                                    Android.onError("Erro durante a predição: " + error);
-                                }
-                            };
-
-                            img.onerror = function () {
-                                Android.onError("Erro ao carregar a imagem para análise.");
-                            };
-
-                            img.src = "data:image/jpeg;base64," + base64Image;
-
-                        } catch (error) {
-                            Android.onError("Erro ao analisar imagem: " + error);
-                        }
-                    }
-
-                    loadModel();
-                </script>
-            </body>
-            </html>
-        """.trimIndent()
-
-        webViewIA.loadDataWithBaseURL(
-            "https://teachablemachine.withgoogle.com/",
-            html,
-            "text/html",
-            "UTF-8",
-            null
-        )
-    }
-
-    private fun analyzeImage(bitmap: Bitmap) {
-        progress.visibility = View.VISIBLE
-        resultCard.visibility = View.GONE
-        btnAnalyze.isEnabled = false
-        btnExportPdf.isEnabled = false
-
-        val base64Image = bitmapToBase64(bitmap)
-
-        webViewIA.evaluateJavascript(
-            "predictImage('$base64Image');",
-            null
-        )
-    }
-
-    private fun bitmapToBase64(bitmap: Bitmap): String {
-        val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-
-        val outputStream = ByteArrayOutputStream()
-        resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
-
-        val imageBytes = outputStream.toByteArray()
-
-        return Base64.encodeToString(imageBytes, Base64.NO_WRAP)
-    }
-
-    inner class IAResultBridge {
-
-        @JavascriptInterface
-        fun onModelLoaded(message: String) {
-            runOnUiThread {
-                modelLoaded = true
-                btnAnalyze.isEnabled = currentBitmap != null
-            }
-        }
-
-        @JavascriptInterface
-        fun onResult(jsonResult: String) {
-            runOnUiThread {
-                progress.visibility = View.GONE
-                btnAnalyze.isEnabled = true
-                resultCard.visibility = View.VISIBLE
-
-                processResult(jsonResult)
-            }
-        }
-
-        @JavascriptInterface
-        fun onError(error: String) {
-            runOnUiThread {
-                progress.visibility = View.GONE
-                btnAnalyze.isEnabled = currentBitmap != null
-                showError(error)
-            }
-        }
-    }
-
-    private fun processResult(jsonResult: String) {
-        try {
-            val array = JSONArray(jsonResult)
-
-            var cancerProbability = 0.0
-            var naoCancerProbability = 0.0
-            val allResults = StringBuilder()
-
-            for (i in 0 until array.length()) {
-                val item = array.getJSONObject(i)
-
-                val classNameOriginal = item.getString("className")
-                val className = normalizeClassName(classNameOriginal)
-                val probability = item.getDouble("probability")
-                val percent = probability * 100.0
-
-                allResults.append(classNameOriginal)
-                    .append(": ")
-                    .append(formatNumber(percent))
-                    .append("%\n")
-
-                when (className) {
-                    "cancer" -> cancerProbability = probability
-                    "naocancer" -> naoCancerProbability = probability
-                }
-            }
-
-            val cancerPercent = cancerProbability * 100.0
-            val naoCancerPercent = naoCancerProbability * 100.0
-
-            lastCancerPercent = cancerPercent
-            lastNaoCancerPercent = naoCancerPercent
-            lastClasses = allResults.toString()
-
-            txtPercentage.text = "${formatNumber(cancerPercent)}%"
-
-            when {
-                cancerPercent >= 70.0 -> {
-                    lastRiskTitle = "Risco alto"
-                    lastDescription =
-                        "A IA identificou alta compatibilidade visual com a classe Cancer. Procure um dermatologista o mais breve possível para avaliação."
-
-                    txtRiskTitle.text = lastRiskTitle
-                    txtPercentage.setTextColor(Color.parseColor("#D9534F"))
-                    txtDescription.text = lastDescription
-                }
-
-                cancerPercent >= 40.0 -> {
-                    lastRiskTitle = "Risco médio"
-                    lastDescription =
-                        "A IA identificou compatibilidade intermediária com a classe Cancer. Recomenda-se avaliação médica para confirmação."
-
-                    txtRiskTitle.text = lastRiskTitle
-                    txtPercentage.setTextColor(Color.parseColor("#E6A23C"))
-                    txtDescription.text = lastDescription
-                }
-
-                else -> {
-                    lastRiskTitle = "Risco baixo"
-                    lastDescription =
-                        "A IA identificou baixa compatibilidade com a classe Cancer. Mesmo assim, observe mudanças na pele e procure um médico em caso de dúvida."
-
-                    txtRiskTitle.text = lastRiskTitle
-                    txtPercentage.setTextColor(Color.parseColor("#5CB85C"))
-                    txtDescription.text = lastDescription
-                }
-            }
-
-            lastSizeReport = generateSizeAnalysis(currentBitmap)
-            lastAbcdeReport = generateABCDEAnalysis(currentBitmap)
-
-            txtABCDE.text =
-                lastAbcdeReport +
-                        "\n\n" +
-                        "Tamanho e diâmetro estimados\n\n" +
-                        lastSizeReport
-
-            txtClasses.text =
-                "Resultado detalhado da IA:\n\n" +
-                        "Cancer: ${formatNumber(cancerPercent)}%\n" +
-                        "Nao_Cancer: ${formatNumber(naoCancerPercent)}%\n\n" +
-                        "Retorno original:\n$allResults"
-
-            btnExportPdf.isEnabled = true
-
-        } catch (e: Exception) {
-            showError("Erro ao interpretar o resultado da IA: ${e.message}")
-        }
-    }
-
-    private fun generateSizeAnalysis(bitmap: Bitmap?): String {
-        val diameterText = edtDiameter.text.toString().trim()
-        val diameter = diameterText.replace(",", ".").toDoubleOrNull()
-
-        lastDiameterMm = diameter
-
-        val estimatedAreaMm2 = if (diameter != null && diameter > 0.0) {
-            PI * (diameter / 2.0) * (diameter / 2.0)
-        } else {
-            null
-        }
-
-        lastEstimatedAreaMm2 = estimatedAreaMm2
-
-        if (bitmap == null) {
-            return "Não foi possível estimar o tamanho visual sem imagem."
-        }
-
-        val resized = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-
-        val lesionPixels = estimateLesionAreaPixels(resized)
-        val totalPixels = resized.width * resized.height
-
-        val imagePercent = (lesionPixels.toDouble() / totalPixels.toDouble()) * 100.0
-        val pixelDiameter = 2.0 * sqrt(lesionPixels.toDouble() / PI)
-
-        lastEstimatedAreaPixels = lesionPixels
-        lastEstimatedImagePercent = imagePercent
-        lastEstimatedPixelDiameter = pixelDiameter
-
-        val diameterClassification = when {
-            diameter == null -> "Diâmetro informado: não informado pelo usuário."
-            diameter >= 6.0 -> "Diâmetro informado: ${formatNumber(diameter)} mm. Atenção: valor maior ou igual a 6 mm."
-            else -> "Diâmetro informado: ${formatNumber(diameter)} mm. Valor menor que 6 mm."
-        }
-
-        val areaMmText = if (estimatedAreaMm2 != null) {
-            "Área aproximada pela medida informada: ${formatNumber(estimatedAreaMm2)} mm²."
-        } else {
-            "Área aproximada em mm²: não calculada, pois o diâmetro não foi informado."
-        }
-
-        return """
-            $diameterClassification
-            $areaMmText
-            Área visual estimada na foto: $lesionPixels pixels.
-            Ocupação aproximada na imagem: ${formatNumber(imagePercent)}%.
-            Diâmetro visual estimado na imagem: ${formatNumber(pixelDiameter)} pixels.
-        """.trimIndent()
-    }
-
-    private fun estimateLesionAreaPixels(bitmap: Bitmap): Int {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        var totalBrightness = 0.0
-        var count = 0
-
-        for (y in 0 until height step 2) {
-            for (x in 0 until width step 2) {
-                totalBrightness += brightness(bitmap.getPixel(x, y))
-                count++
-            }
-        }
-
-        val averageBrightness = totalBrightness / count
-        val threshold = averageBrightness - 20.0
-
-        var lesionPixels = 0
-
-        for (y in 0 until height) {
-            for (x in 0 until width) {
-                val pixelBrightness = brightness(bitmap.getPixel(x, y))
-
-                if (pixelBrightness < threshold) {
-                    lesionPixels++
-                }
-            }
-        }
-
-        return lesionPixels
-    }
-
-    private fun generateABCDEAnalysis(bitmap: Bitmap?): String {
-        if (bitmap == null) {
-            return "Não foi possível calcular a análise ABCDE sem imagem."
-        }
-
-        val resized = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-
-        val asymmetryScore = calculateAsymmetryScore(resized)
-        val borderScore = calculateBorderScore(resized)
-        val colorScore = calculateColorVariationScore(resized)
-
-        val diameterText = edtDiameter.text.toString().trim()
-        val diameter = diameterText.replace(",", ".").toDoubleOrNull()
-
-        val evolutionDetected = checkEvolution.isChecked
-
-        val asymmetryResult = if (asymmetryScore >= 28) {
-            "alteração visual relevante (${formatNumber(asymmetryScore)} pontos)"
-        } else {
-            "baixa alteração visual (${formatNumber(asymmetryScore)} pontos)"
-        }
-
-        val borderResult = if (borderScore >= 35) {
-            "bordas visualmente irregulares (${formatNumber(borderScore)} pontos)"
-        } else {
-            "bordas aparentemente regulares (${formatNumber(borderScore)} pontos)"
-        }
-
-        val colorResult = if (colorScore >= 30) {
-            "variação de cor relevante (${formatNumber(colorScore)} pontos)"
-        } else {
-            "baixa variação de cor (${formatNumber(colorScore)} pontos)"
-        }
-
-        val diameterResult = when {
-            diameter == null -> "não informado"
-            diameter >= 6.0 -> "${formatNumber(diameter)} mm, maior ou igual a 6 mm"
-            else -> "${formatNumber(diameter)} mm, menor que 6 mm"
-        }
-
-        val evolutionResult = if (evolutionDetected) {
-            "houve relato de mudança/evolução"
-        } else {
-            "sem evolução relatada"
-        }
-
-        val score = calculateABCDETotalScore(
-            asymmetryScore,
-            borderScore,
-            colorScore,
-            diameter,
-            evolutionDetected
-        )
-
-        val recommendation = when {
-            score >= 4 -> "Atenção alta: recomenda-se procurar um dermatologista o quanto antes."
-            score >= 2 -> "Atenção moderada: recomenda-se acompanhar e buscar avaliação profissional."
-            else -> "Atenção baixa: manter observação e procurar um médico se houver mudanças."
-        }
-
-        return """
-            Análise ABCDE
-            
-            A - Assimetria: $asymmetryResult
-            B - Bordas: $borderResult
-            C - Cor: $colorResult
-            D - Diâmetro: $diameterResult
-            E - Evolução: $evolutionResult
-            
-            Pontuação ABCDE estimada: $score/5
-            
-            $recommendation
-        """.trimIndent()
-    }
-
-    private fun calculateABCDETotalScore(
-        asymmetryScore: Double,
-        borderScore: Double,
-        colorScore: Double,
-        diameter: Double?,
-        evolutionDetected: Boolean
-    ): Int {
-        var score = 0
-
-        if (asymmetryScore >= 28) score++
-        if (borderScore >= 35) score++
-        if (colorScore >= 30) score++
-        if (diameter != null && diameter >= 6.0) score++
-        if (evolutionDetected) score++
-
-        return score
-    }
-
-    private fun calculateAsymmetryScore(bitmap: Bitmap): Double {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        var difference = 0.0
-        var count = 0
-
-        for (y in 0 until height) {
-            for (x in 0 until width / 2) {
-                val leftPixel = bitmap.getPixel(x, y)
-                val rightPixel = bitmap.getPixel(width - 1 - x, y)
-
-                val diff = colorDistance(leftPixel, rightPixel)
-                difference += diff
-                count++
-            }
-        }
-
-        return if (count > 0) difference / count else 0.0
-    }
-
-    private fun calculateBorderScore(bitmap: Bitmap): Double {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        var edgeChanges = 0
-        var totalChecks = 0
-
-        for (y in 1 until height - 1) {
-            for (x in 1 until width - 1) {
-                val center = brightness(bitmap.getPixel(x, y))
-                val right = brightness(bitmap.getPixel(x + 1, y))
-                val bottom = brightness(bitmap.getPixel(x, y + 1))
-
-                if (abs(center - right) > 45 || abs(center - bottom) > 45) {
-                    edgeChanges++
-                }
-
-                totalChecks++
-            }
-        }
-
-        return if (totalChecks > 0) {
-            (edgeChanges.toDouble() / totalChecks.toDouble()) * 100.0
-        } else {
-            0.0
-        }
-    }
-
-    private fun calculateColorVariationScore(bitmap: Bitmap): Double {
-        val width = bitmap.width
-        val height = bitmap.height
-
-        var sumR = 0.0
-        var sumG = 0.0
-        var sumB = 0.0
-        var count = 0
-
-        for (y in 0 until height step 2) {
-            for (x in 0 until width step 2) {
-                val pixel = bitmap.getPixel(x, y)
-                sumR += Color.red(pixel)
-                sumG += Color.green(pixel)
-                sumB += Color.blue(pixel)
-                count++
-            }
-        }
-
-        val avgR = sumR / count
-        val avgG = sumG / count
-        val avgB = sumB / count
-
-        var variation = 0.0
-
-        for (y in 0 until height step 2) {
-            for (x in 0 until width step 2) {
-                val pixel = bitmap.getPixel(x, y)
-
-                val dr = Color.red(pixel) - avgR
-                val dg = Color.green(pixel) - avgG
-                val db = Color.blue(pixel) - avgB
-
-                variation += sqrt((dr * dr) + (dg * dg) + (db * db))
-            }
-        }
-
-        return variation / count
-    }
-
-    private fun brightness(pixel: Int): Int {
-        return ((Color.red(pixel) * 0.299) +
-                (Color.green(pixel) * 0.587) +
-                (Color.blue(pixel) * 0.114)).roundToInt()
-    }
-
-    private fun colorDistance(pixel1: Int, pixel2: Int): Double {
-        val r = Color.red(pixel1) - Color.red(pixel2)
-        val g = Color.green(pixel1) - Color.green(pixel2)
-        val b = Color.blue(pixel1) - Color.blue(pixel2)
-
-        return sqrt((r * r + g * g + b * b).toDouble())
-    }
-
-    private fun exportPdfReport() {
-        try {
-            val pdfBytes = generatePdfBytes()
-            pendingPdfBytes = pdfBytes
-
-            val fileName = "relatorio_dermaskin_${System.currentTimeMillis()}.pdf"
-            createPdfLauncher.launch(fileName)
-
-        } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                "Erro ao gerar PDF: ${e.message}",
-                Toast.LENGTH_LONG
-            ).show()
-        }
-    }
-
-    private fun generatePdfBytes(): ByteArray {
-        val pdfDocument = PdfDocument()
-
-        val pageWidth = 595
-        val pageHeight = 842
-
-        val pageInfo = PdfDocument.PageInfo.Builder(pageWidth, pageHeight, 1).create()
-        val page = pdfDocument.startPage(pageInfo)
-
-        drawPdfContent(page.canvas)
-
-        pdfDocument.finishPage(page)
-
-        val outputStream = ByteArrayOutputStream()
-        pdfDocument.writeTo(outputStream)
-        pdfDocument.close()
-
-        return outputStream.toByteArray()
-    }
-
-    private fun drawPdfContent(canvas: Canvas) {
-        val titlePaint = Paint().apply {
-            color = Color.parseColor("#5A2F20")
-            textSize = 28f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-        }
-
-        val subtitlePaint = Paint().apply {
-            color = Color.parseColor("#8B4A2F")
-            textSize = 15f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-        }
-
-        val normalPaint = Paint().apply {
-            color = Color.parseColor("#2E1B13")
-            textSize = 11.5f
-            isAntiAlias = true
-        }
-
-        val smallPaint = Paint().apply {
-            color = Color.DKGRAY
-            textSize = 10f
-            isAntiAlias = true
-        }
-
-        val cardPaint = Paint().apply {
-            color = Color.parseColor("#FFF8F2")
-            style = Paint.Style.FILL
-            isAntiAlias = true
-        }
-
-        val borderPaint = Paint().apply {
-            color = Color.parseColor("#D8B6A4")
-            style = Paint.Style.STROKE
-            strokeWidth = 2f
-            isAntiAlias = true
-        }
-
-        val riskPaint = Paint().apply {
-            color = when {
-                lastCancerPercent >= 70 -> Color.parseColor("#D9534F")
-                lastCancerPercent >= 40 -> Color.parseColor("#E6A23C")
-                else -> Color.parseColor("#5CB85C")
-            }
-            textSize = 36f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            isAntiAlias = true
-        }
-
-        canvas.drawColor(Color.WHITE)
-
-        canvas.drawText("DermaSkin", 40f, 55f, titlePaint)
-        canvas.drawText("Relatório de triagem visual com inteligência artificial", 40f, 80f, subtitlePaint)
-
-        val date = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date())
-        canvas.drawText("Data da análise: $date", 40f, 105f, normalPaint)
-
-        canvas.drawRoundRect(35f, 125f, 560f, 255f, 22f, 22f, cardPaint)
-        canvas.drawRoundRect(35f, 125f, 560f, 255f, 22f, 22f, borderPaint)
-
-        canvas.drawText("Resultado principal", 55f, 155f, subtitlePaint)
-        canvas.drawText(lastRiskTitle, 55f, 185f, titlePaint)
-        canvas.drawText("${formatNumber(lastCancerPercent)}%", 380f, 190f, riskPaint)
-
-        drawMultilineText(
-            canvas,
-            "Chance estimada para a classe Cancer segundo o modelo treinado.",
-            55f,
-            220f,
-            normalPaint,
-            75
-        )
-
-        currentBitmap?.let { bitmap ->
-            val image = Bitmap.createScaledBitmap(bitmap, 120, 120, true)
-            canvas.drawBitmap(image, 415f, 275f, null)
-            canvas.drawText("Imagem analisada", 417f, 410f, smallPaint)
-        }
-
-        canvas.drawText("Análise ABCDE", 40f, 290f, subtitlePaint)
-
-        drawMultilineText(
-            canvas,
-            lastAbcdeReport,
-            40f,
-            315f,
-            normalPaint,
-            78
-        )
-
-        canvas.drawText("Tamanho e diâmetro", 40f, 505f, subtitlePaint)
-
-        drawMultilineText(
-            canvas,
-            lastSizeReport,
-            40f,
-            530f,
-            normalPaint,
-            82
-        )
-
-        canvas.drawText("Resultado detalhado da IA", 40f, 640f, subtitlePaint)
-
-        val classText =
-            "Cancer: ${formatNumber(lastCancerPercent)}%\n" +
-                    "Nao_Cancer: ${formatNumber(lastNaoCancerPercent)}%"
-
-        drawMultilineText(
-            canvas,
-            classText,
-            40f,
-            665f,
-            normalPaint,
-            80
-        )
-
-        canvas.drawText("Orientação para captura da imagem", 40f, 710f, subtitlePaint)
-
-        drawMultilineText(
-            canvas,
-            "A foto deve ser feita com o celular a aproximadamente 10 cm da pele, com boa iluminação, sem sombra e sem flash direto.",
-            40f,
-            735f,
-            normalPaint,
-            90
-        )
-
-        canvas.drawText("Observação importante", 40f, 770f, subtitlePaint)
-
-        val warning =
-            "Este relatório não possui valor diagnóstico e não substitui consulta médica. " +
-                    "A análise é apenas uma triagem computacional baseada em imagem e no modelo treinado. " +
-                    "Em caso de suspeita, mudança na pele, dor, sangramento, coceira ou crescimento da lesão, procure um dermatologista."
-
-        drawMultilineText(
-            canvas,
-            warning,
-            40f,
-            795f,
-            normalPaint,
-            90
-        )
-
-        canvas.drawText("Gerado pelo aplicativo DermaSkin", 40f, 830f, smallPaint)
-    }
-
-    private fun drawMultilineText(
-        canvas: Canvas,
-        text: String,
-        x: Float,
-        startY: Float,
-        paint: Paint,
-        maxCharsPerLine: Int
-    ) {
-        var y = startY
-        val lines = mutableListOf<String>()
-
-        text.split("\n").forEach { paragraph ->
-            if (paragraph.length <= maxCharsPerLine) {
-                lines.add(paragraph)
+        btnRegister.setOnClickListener {
+            if (isLoginMode) {
+                changeToRegisterMode()
             } else {
-                var currentLine = ""
-
-                paragraph.split(" ").forEach { word ->
-                    if ((currentLine + " " + word).trim().length <= maxCharsPerLine) {
-                        currentLine = (currentLine + " " + word).trim()
-                    } else {
-                        lines.add(currentLine)
-                        currentLine = word
-                    }
-                }
-
-                if (currentLine.isNotBlank()) {
-                    lines.add(currentLine)
-                }
+                registerUser()
             }
         }
 
-        for (line in lines) {
-            canvas.drawText(line, x, y, paint)
-            y += 16f
+        btnLogin.setOnClickListener {
+            if (isLoginMode) {
+                loginUser()
+            } else {
+                changeToLoginMode()
+            }
         }
     }
 
-    private fun normalizeClassName(name: String): String {
-        return name
-            .lowercase(Locale.ROOT)
-            .replace(" ", "")
-            .replace("_", "")
-            .replace("-", "")
-            .replace("ã", "a")
-            .replace("á", "a")
-            .replace("â", "a")
-            .replace("é", "e")
-            .replace("ê", "e")
-            .replace("í", "i")
-            .replace("ó", "o")
-            .replace("ô", "o")
-            .replace("ú", "u")
-            .replace("ç", "c")
+    private fun changeToLoginMode() {
+        isLoginMode = true
+
+        txtMode.text = "Entrar na conta"
+        edtName.visibility = View.GONE
+        checkTerms.visibility = View.GONE
+
+        btnLogin.text = "Entrar"
+        btnRegister.text = "Criar nova conta"
+
+        edtName.text.clear()
+        edtEmail.text.clear()
+        edtPassword.text.clear()
     }
 
-    private fun formatNumber(value: Double): String {
-        return String.format(Locale.US, "%.2f", value)
+    private fun changeToRegisterMode() {
+        isLoginMode = false
+
+        txtMode.text = "Criar conta"
+        edtName.visibility = View.VISIBLE
+        checkTerms.visibility = View.VISIBLE
+
+        btnRegister.text = "Criar conta"
+        btnLogin.text = "Já tenho conta"
+
+        edtName.text.clear()
+        edtEmail.text.clear()
+        edtPassword.text.clear()
     }
 
-    private fun showError(message: String) {
-        resultCard.visibility = View.VISIBLE
+    private fun registerUser() {
+        val name = edtName.text.toString().trim()
+        val email = edtEmail.text.toString().trim()
+        val password = edtPassword.text.toString().trim()
 
-        txtRiskTitle.text = "Atenção"
-        txtPercentage.text = "!"
-        txtPercentage.setTextColor(Color.parseColor("#D9534F"))
-        txtDescription.text = message
-        txtClasses.text = ""
-        txtABCDE.text = ""
-        btnExportPdf.isEnabled = false
+        when {
+            name.isEmpty() -> {
+                edtName.error = "Informe seu nome"
+                edtName.requestFocus()
+                return
+            }
+
+            email.isEmpty() -> {
+                edtEmail.error = "Informe seu e-mail"
+                edtEmail.requestFocus()
+                return
+            }
+
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                edtEmail.error = "Informe um e-mail válido"
+                edtEmail.requestFocus()
+                return
+            }
+
+            password.length < 6 -> {
+                edtPassword.error = "A senha precisa ter pelo menos 6 caracteres"
+                edtPassword.requestFocus()
+                return
+            }
+
+            !checkTerms.isChecked -> {
+                Toast.makeText(
+                    this,
+                    "Você precisa aceitar o aviso de triagem médica.",
+                    Toast.LENGTH_LONG
+                ).show()
+                return
+            }
+        }
+
+        setLoading(true)
+
+        auth.createUserWithEmailAndPassword(email, password)
+            .addOnSuccessListener { result ->
+                val userId = result.user?.uid
+
+                if (userId != null) {
+                    saveUserData(userId, name, email)
+                } else {
+                    setLoading(false)
+                    Toast.makeText(
+                        this,
+                        "Erro ao obter ID do usuário.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+            }
+            .addOnFailureListener { error ->
+                setLoading(false)
+
+                Toast.makeText(
+                    this,
+                    "Erro ao criar conta: ${error.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+    }
+
+    private fun saveUserData(userId: String, name: String, email: String) {
+        val database = FirebaseDatabase.getInstance().reference
+
+        val userData = mapOf(
+            "id" to userId,
+            "nome" to name,
+            "email" to email,
+            "dataCadastro" to System.currentTimeMillis()
+        )
+
+        database.child("usuarios")
+            .child(userId)
+            .setValue(userData)
+            .addOnSuccessListener {
+                setLoading(false)
+
+                Toast.makeText(
+                    this,
+                    "Conta criada com sucesso!",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                openAnaliseScreen()
+            }
+            .addOnFailureListener { error ->
+                setLoading(false)
+
+                Toast.makeText(
+                    this,
+                    "Conta criada, mas houve erro ao salvar os dados: ${error.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                openAnaliseScreen()
+            }
+    }
+
+    private fun loginUser() {
+        val email = edtEmail.text.toString().trim()
+        val password = edtPassword.text.toString().trim()
+
+        when {
+            email.isEmpty() -> {
+                edtEmail.error = "Informe seu e-mail"
+                edtEmail.requestFocus()
+                return
+            }
+
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                edtEmail.error = "Informe um e-mail válido"
+                edtEmail.requestFocus()
+                return
+            }
+
+            password.isEmpty() -> {
+                edtPassword.error = "Informe sua senha"
+                edtPassword.requestFocus()
+                return
+            }
+        }
+
+        setLoading(true)
+
+        auth.signInWithEmailAndPassword(email, password)
+            .addOnSuccessListener {
+                setLoading(false)
+
+                Toast.makeText(
+                    this,
+                    "Login realizado com sucesso!",
+                    Toast.LENGTH_LONG
+                ).show()
+
+                openAnaliseScreen()
+            }
+            .addOnFailureListener { error ->
+                setLoading(false)
+
+                Toast.makeText(
+                    this,
+                    "Erro ao entrar: ${error.message}",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+    }
+
+    private fun openAnaliseScreen() {
+        val intent = Intent(this, AnaliseActivity::class.java)
+        startActivity(intent)
+        finish()
+    }
+
+    private fun setLoading(isLoading: Boolean) {
+        progressBar.visibility = if (isLoading) View.VISIBLE else View.GONE
+
+        btnRegister.isEnabled = !isLoading
+        btnLogin.isEnabled = !isLoading
+        edtName.isEnabled = !isLoading
+        edtEmail.isEnabled = !isLoading
+        edtPassword.isEnabled = !isLoading
+        checkTerms.isEnabled = !isLoading
     }
 }
