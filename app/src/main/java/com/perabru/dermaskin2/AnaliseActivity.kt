@@ -165,7 +165,7 @@ class AnaliseActivity : AppCompatActivity() {
         btnCamera = findViewById(R.id.btnCamera)
         btnAnalyze = findViewById(R.id.btnAnalyze)
         btnExportPdf = findViewById(R.id.btnExportPdf)
-        btnLogout = findViewById(R.id.btnLogout)
+       // btnLogout = findViewById(R.id.btnLogout)
         progress = findViewById(R.id.progress)
         resultCard = findViewById(R.id.resultCard)
         txtRiskTitle = findViewById(R.id.txtRiskTitle)
