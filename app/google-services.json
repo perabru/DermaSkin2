@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "808326341076",
+    "project_id": "dermaskin-779a1",
+    "storage_bucket": "dermaskin-779a1.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:808326341076:android:400665abc2824bfd033641",
+        "android_client_info": {
+          "package_name": "com.perabru.dermaskin2"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCN1XjyzX-vHOmwznCCXsdT9A3kYJFficw"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
