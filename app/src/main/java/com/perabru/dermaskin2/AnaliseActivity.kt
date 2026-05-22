@@ -3,6 +3,7 @@ package com.perabru.dermaskin2
 import android.Manifest
 import android.annotation.SuppressLint
 import android.app.AlertDialog
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -15,8 +16,8 @@ import android.util.Base64
 import android.view.View
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
+import android.webkit.WebSettings
 import android.webkit.WebView
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ImageView
@@ -27,6 +28,7 @@ import android.widget.Toast
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.firebase.auth.FirebaseAuth
 import org.json.JSONArray
 import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
@@ -39,10 +41,13 @@ import kotlin.math.sqrt
 
 class AnaliseActivity : AppCompatActivity() {
 
+    private lateinit var auth: FirebaseAuth
+
     private lateinit var imgPreview: ImageView
-    private lateinit var btnCamera: Button
-    private lateinit var btnAnalyze: Button
-    private lateinit var btnExportPdf: Button
+    private lateinit var btnCamera: TextView
+    private lateinit var btnAnalyze: TextView
+    private lateinit var btnExportPdf: TextView
+    private lateinit var btnLogout: TextView
     private lateinit var progress: ProgressBar
     private lateinit var resultCard: LinearLayout
     private lateinit var txtRiskTitle: TextView
@@ -88,18 +93,10 @@ class AnaliseActivity : AppCompatActivity() {
                         outputStream.write(bytes)
                     }
 
-                    Toast.makeText(
-                        this,
-                        "Relatório PDF salvo com sucesso!",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this, "Relatório PDF salvo com sucesso!", Toast.LENGTH_LONG).show()
 
                 } catch (e: Exception) {
-                    Toast.makeText(
-                        this,
-                        "Erro ao salvar PDF: ${e.message}",
-                        Toast.LENGTH_LONG
-                    ).show()
+                    Toast.makeText(this, "Erro ao salvar PDF: ${e.message}", Toast.LENGTH_LONG).show()
                 }
             }
         }
@@ -118,9 +115,15 @@ class AnaliseActivity : AppCompatActivity() {
             if (bitmap != null) {
                 currentBitmap = bitmap
                 imgPreview.setImageBitmap(bitmap)
+
                 btnAnalyze.isEnabled = modelLoaded
+                btnAnalyze.alpha = if (modelLoaded) 1.0f else 0.55f
+
                 btnExportPdf.isEnabled = false
+                btnExportPdf.alpha = 0.55f
+
                 resultCard.visibility = View.GONE
+                limparUltimosResultados()
             } else {
                 showError("Nenhuma imagem foi capturada.")
             }
@@ -129,12 +132,40 @@ class AnaliseActivity : AppCompatActivity() {
     @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
+        setContentView(R.layout.activity_analise)
 
+        auth = FirebaseAuth.getInstance()
+
+        if (auth.currentUser == null) {
+            voltarParaLogin()
+            return
+        }
+
+        iniciarComponentes()
+        configurarEstadoInicial()
+        configurarWebViewIA()
+        configurarCliques()
+    }
+
+    override fun onDestroy() {
+        try {
+            webViewIA.removeJavascriptInterface("Android")
+            webViewIA.stopLoading()
+            webViewIA.loadUrl("about:blank")
+            webViewIA.clearHistory()
+            webViewIA.destroy()
+        } catch (_: Exception) {
+        }
+
+        super.onDestroy()
+    }
+
+    private fun iniciarComponentes() {
         imgPreview = findViewById(R.id.imgPreview)
         btnCamera = findViewById(R.id.btnCamera)
         btnAnalyze = findViewById(R.id.btnAnalyze)
         btnExportPdf = findViewById(R.id.btnExportPdf)
+        btnLogout = findViewById(R.id.btnLogout)
         progress = findViewById(R.id.progress)
         resultCard = findViewById(R.id.resultCard)
         txtRiskTitle = findViewById(R.id.txtRiskTitle)
@@ -145,12 +176,32 @@ class AnaliseActivity : AppCompatActivity() {
         webViewIA = findViewById(R.id.webViewIA)
         edtDiameter = findViewById(R.id.edtDiameter)
         checkEvolution = findViewById(R.id.checkEvolution)
+    }
+
+    private fun configurarEstadoInicial() {
+        progress.visibility = View.GONE
+        resultCard.visibility = View.GONE
 
         btnAnalyze.isEnabled = false
+        btnAnalyze.alpha = 0.55f
+
         btnExportPdf.isEnabled = false
+        btnExportPdf.alpha = 0.55f
 
-        setupWebViewIA()
+        btnCamera.isEnabled = true
+        btnCamera.alpha = 1.0f
 
+        btnLogout.isEnabled = true
+        btnLogout.alpha = 1.0f
+
+        txtRiskTitle.text = ""
+        txtPercentage.text = ""
+        txtDescription.text = ""
+        txtClasses.text = ""
+        txtABCDE.text = ""
+    }
+
+    private fun configurarCliques() {
         btnCamera.setOnClickListener {
             showPhotoInstructionDialog()
         }
@@ -174,6 +225,48 @@ class AnaliseActivity : AppCompatActivity() {
         btnExportPdf.setOnClickListener {
             exportPdfReport()
         }
+
+        btnLogout.setOnClickListener {
+            confirmarSaida()
+        }
+    }
+
+    private fun confirmarSaida() {
+        AlertDialog.Builder(this)
+            .setTitle("Sair da conta")
+            .setMessage("Deseja realmente sair e voltar para a tela de login?")
+            .setPositiveButton("Sair") { _, _ ->
+                auth.signOut()
+                Toast.makeText(this, "Você saiu da conta.", Toast.LENGTH_SHORT).show()
+                voltarParaLogin()
+            }
+            .setNegativeButton("Cancelar", null)
+            .show()
+    }
+
+    private fun voltarParaLogin() {
+        val intent = Intent(this, MainActivity::class.java)
+        intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+        startActivity(intent)
+        finish()
+    }
+
+    private fun limparUltimosResultados() {
+        lastCancerPercent = 0.0
+        lastNaoCancerPercent = 0.0
+        lastRiskTitle = ""
+        lastDescription = ""
+        lastClasses = ""
+        lastAbcdeReport = ""
+        lastSizeReport = ""
+
+        lastDiameterMm = null
+        lastEstimatedAreaMm2 = null
+        lastEstimatedAreaPixels = 0
+        lastEstimatedImagePercent = 0.0
+        lastEstimatedPixelDiameter = 0.0
+
+        pendingPdfBytes = null
     }
 
     private fun showPhotoInstructionDialog() {
@@ -192,10 +285,7 @@ class AnaliseActivity : AppCompatActivity() {
     }
 
     private fun checkCameraPermission() {
-        val permission = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.CAMERA
-        )
+        val permission = ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA)
 
         if (permission == PackageManager.PERMISSION_GRANTED) {
             openCamera()
@@ -208,12 +298,18 @@ class AnaliseActivity : AppCompatActivity() {
         cameraLauncher.launch(null)
     }
 
-    @SuppressLint("SetJavaScriptEnabled")
-    private fun setupWebViewIA() {
+    @SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+    private fun configurarWebViewIA() {
+        webViewIA.setLayerType(View.LAYER_TYPE_SOFTWARE, null)
+
         webViewIA.settings.javaScriptEnabled = true
         webViewIA.settings.domStorageEnabled = true
         webViewIA.settings.allowFileAccess = true
         webViewIA.settings.allowContentAccess = true
+        webViewIA.settings.cacheMode = WebSettings.LOAD_NO_CACHE
+        webViewIA.settings.loadsImagesAutomatically = true
+        webViewIA.settings.mediaPlaybackRequiresUserGesture = false
+
         webViewIA.webChromeClient = WebChromeClient()
         webViewIA.addJavascriptInterface(IAResultBridge(), "Android")
 
@@ -223,17 +319,15 @@ class AnaliseActivity : AppCompatActivity() {
             <head>
                 <meta charset="UTF-8">
                 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-                <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@latest/dist/tf.min.js"></script>
-                <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@latest/dist/teachablemachine-image.min.js"></script>
+                
+                <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@3.21.0/dist/tf.min.js"></script>
+                <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
             </head>
-
             <body>
-                <img id="image" width="224" height="224" />
-
+                <img id="image" width="224" height="224" style="display:none;" />
+                
                 <script>
                     const URL_MODELO = "https://teachablemachine.withgoogle.com/models/zceGA0QO5/";
-
                     let model = null;
                     let isLoaded = false;
 
@@ -254,7 +348,7 @@ class AnaliseActivity : AppCompatActivity() {
                     async function predictImage(base64Image) {
                         try {
                             if (!isLoaded || model === null) {
-                                Android.onError("Modelo ainda não carregado.");
+                                Android.onError("Modelo ainda nao carregado.");
                                 return;
                             }
 
@@ -265,16 +359,15 @@ class AnaliseActivity : AppCompatActivity() {
                                     const prediction = await model.predict(img);
                                     Android.onResult(JSON.stringify(prediction));
                                 } catch (error) {
-                                    Android.onError("Erro durante a predição: " + error);
+                                    Android.onError("Erro durante a predicao: " + error);
                                 }
                             };
 
                             img.onerror = function () {
-                                Android.onError("Erro ao carregar a imagem para análise.");
+                                Android.onError("Erro ao carregar a imagem para analise.");
                             };
 
                             img.src = "data:image/jpeg;base64," + base64Image;
-
                         } catch (error) {
                             Android.onError("Erro ao analisar imagem: " + error);
                         }
@@ -298,26 +391,28 @@ class AnaliseActivity : AppCompatActivity() {
     private fun analyzeImage(bitmap: Bitmap) {
         progress.visibility = View.VISIBLE
         resultCard.visibility = View.GONE
+
         btnAnalyze.isEnabled = false
+        btnAnalyze.alpha = 0.55f
+
+        btnCamera.isEnabled = false
+        btnCamera.alpha = 0.55f
+
         btnExportPdf.isEnabled = false
+        btnExportPdf.alpha = 0.55f
 
         val base64Image = bitmapToBase64(bitmap)
 
-        webViewIA.evaluateJavascript(
-            "predictImage('$base64Image');",
-            null
-        )
+        webViewIA.evaluateJavascript("predictImage('$base64Image');", null)
     }
 
     private fun bitmapToBase64(bitmap: Bitmap): String {
         val resizedBitmap = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-
         val outputStream = ByteArrayOutputStream()
+
         resizedBitmap.compress(Bitmap.CompressFormat.JPEG, 90, outputStream)
 
-        val imageBytes = outputStream.toByteArray()
-
-        return Base64.encodeToString(imageBytes, Base64.NO_WRAP)
+        return Base64.encodeToString(outputStream.toByteArray(), Base64.NO_WRAP)
     }
 
     inner class IAResultBridge {
@@ -327,6 +422,13 @@ class AnaliseActivity : AppCompatActivity() {
             runOnUiThread {
                 modelLoaded = true
                 btnAnalyze.isEnabled = currentBitmap != null
+                btnAnalyze.alpha = if (currentBitmap != null) 1.0f else 0.55f
+
+                Toast.makeText(
+                    this@AnaliseActivity,
+                    "IA carregada com sucesso.",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
         }
 
@@ -334,9 +436,14 @@ class AnaliseActivity : AppCompatActivity() {
         fun onResult(jsonResult: String) {
             runOnUiThread {
                 progress.visibility = View.GONE
-                btnAnalyze.isEnabled = true
-                resultCard.visibility = View.VISIBLE
 
+                btnAnalyze.isEnabled = true
+                btnAnalyze.alpha = 1.0f
+
+                btnCamera.isEnabled = true
+                btnCamera.alpha = 1.0f
+
+                resultCard.visibility = View.VISIBLE
                 processResult(jsonResult)
             }
         }
@@ -345,7 +452,16 @@ class AnaliseActivity : AppCompatActivity() {
         fun onError(error: String) {
             runOnUiThread {
                 progress.visibility = View.GONE
+
                 btnAnalyze.isEnabled = currentBitmap != null
+                btnAnalyze.alpha = if (currentBitmap != null) 1.0f else 0.55f
+
+                btnCamera.isEnabled = true
+                btnCamera.alpha = 1.0f
+
+                btnExportPdf.isEnabled = false
+                btnExportPdf.alpha = 0.55f
+
                 showError(error)
             }
         }
@@ -392,40 +508,33 @@ class AnaliseActivity : AppCompatActivity() {
                     lastRiskTitle = "Risco alto"
                     lastDescription =
                         "A IA identificou alta compatibilidade visual com a classe Cancer. Procure um dermatologista o mais breve possível para avaliação."
-
-                    txtRiskTitle.text = lastRiskTitle
                     txtPercentage.setTextColor(Color.parseColor("#D9534F"))
-                    txtDescription.text = lastDescription
                 }
 
                 cancerPercent >= 40.0 -> {
                     lastRiskTitle = "Risco médio"
                     lastDescription =
                         "A IA identificou compatibilidade intermediária com a classe Cancer. Recomenda-se avaliação médica para confirmação."
-
-                    txtRiskTitle.text = lastRiskTitle
                     txtPercentage.setTextColor(Color.parseColor("#E6A23C"))
-                    txtDescription.text = lastDescription
                 }
 
                 else -> {
                     lastRiskTitle = "Risco baixo"
                     lastDescription =
                         "A IA identificou baixa compatibilidade com a classe Cancer. Mesmo assim, observe mudanças na pele e procure um médico em caso de dúvida."
-
-                    txtRiskTitle.text = lastRiskTitle
                     txtPercentage.setTextColor(Color.parseColor("#5CB85C"))
-                    txtDescription.text = lastDescription
                 }
             }
+
+            txtRiskTitle.text = lastRiskTitle
+            txtDescription.text = lastDescription
 
             lastSizeReport = generateSizeAnalysis(currentBitmap)
             lastAbcdeReport = generateABCDEAnalysis(currentBitmap)
 
             txtABCDE.text =
                 lastAbcdeReport +
-                        "\n\n" +
-                        "Tamanho e diâmetro estimados\n\n" +
+                        "\n\nTamanho e diâmetro estimados\n\n" +
                         lastSizeReport
 
             txtClasses.text =
@@ -435,6 +544,7 @@ class AnaliseActivity : AppCompatActivity() {
                         "Retorno original:\n$allResults"
 
             btnExportPdf.isEnabled = true
+            btnExportPdf.alpha = 1.0f
 
         } catch (e: Exception) {
             showError("Erro ao interpretar o resultado da IA: ${e.message}")
@@ -460,7 +570,6 @@ class AnaliseActivity : AppCompatActivity() {
         }
 
         val resized = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
-
         val lesionPixels = estimateLesionAreaPixels(resized)
         val totalPixels = resized.width * resized.height
 
@@ -506,16 +615,14 @@ class AnaliseActivity : AppCompatActivity() {
             }
         }
 
-        val averageBrightness = totalBrightness / count
+        val averageBrightness = if (count > 0) totalBrightness / count else 0.0
         val threshold = averageBrightness - 20.0
 
         var lesionPixels = 0
 
         for (y in 0 until height) {
             for (x in 0 until width) {
-                val pixelBrightness = brightness(bitmap.getPixel(x, y))
-
-                if (pixelBrightness < threshold) {
+                if (brightness(bitmap.getPixel(x, y)) < threshold) {
                     lesionPixels++
                 }
             }
@@ -537,26 +644,19 @@ class AnaliseActivity : AppCompatActivity() {
 
         val diameterText = edtDiameter.text.toString().trim()
         val diameter = diameterText.replace(",", ".").toDoubleOrNull()
-
         val evolutionDetected = checkEvolution.isChecked
 
-        val asymmetryResult = if (asymmetryScore >= 28) {
-            "alteração visual relevante (${formatNumber(asymmetryScore)} pontos)"
-        } else {
-            "baixa alteração visual (${formatNumber(asymmetryScore)} pontos)"
-        }
+        val asymmetryResult =
+            if (asymmetryScore >= 28) "alteração visual relevante (${formatNumber(asymmetryScore)} pontos)"
+            else "baixa alteração visual (${formatNumber(asymmetryScore)} pontos)"
 
-        val borderResult = if (borderScore >= 35) {
-            "bordas visualmente irregulares (${formatNumber(borderScore)} pontos)"
-        } else {
-            "bordas aparentemente regulares (${formatNumber(borderScore)} pontos)"
-        }
+        val borderResult =
+            if (borderScore >= 35) "bordas visualmente irregulares (${formatNumber(borderScore)} pontos)"
+            else "bordas aparentemente regulares (${formatNumber(borderScore)} pontos)"
 
-        val colorResult = if (colorScore >= 30) {
-            "variação de cor relevante (${formatNumber(colorScore)} pontos)"
-        } else {
-            "baixa variação de cor (${formatNumber(colorScore)} pontos)"
-        }
+        val colorResult =
+            if (colorScore >= 30) "variação de cor relevante (${formatNumber(colorScore)} pontos)"
+            else "baixa variação de cor (${formatNumber(colorScore)} pontos)"
 
         val diameterResult = when {
             diameter == null -> "não informado"
@@ -564,11 +664,9 @@ class AnaliseActivity : AppCompatActivity() {
             else -> "${formatNumber(diameter)} mm, menor que 6 mm"
         }
 
-        val evolutionResult = if (evolutionDetected) {
-            "houve relato de mudança/evolução"
-        } else {
-            "sem evolução relatada"
-        }
+        val evolutionResult =
+            if (evolutionDetected) "houve relato de mudança/evolução"
+            else "sem evolução relatada"
 
         val score = calculateABCDETotalScore(
             asymmetryScore,
@@ -628,9 +726,7 @@ class AnaliseActivity : AppCompatActivity() {
             for (x in 0 until width / 2) {
                 val leftPixel = bitmap.getPixel(x, y)
                 val rightPixel = bitmap.getPixel(width - 1 - x, y)
-
-                val diff = colorDistance(leftPixel, rightPixel)
-                difference += diff
+                difference += colorDistance(leftPixel, rightPixel)
                 count++
             }
         }
@@ -685,6 +781,8 @@ class AnaliseActivity : AppCompatActivity() {
             }
         }
 
+        if (count == 0) return 0.0
+
         val avgR = sumR / count
         val avgG = sumG / count
         val avgB = sumB / count
@@ -722,6 +820,11 @@ class AnaliseActivity : AppCompatActivity() {
 
     private fun exportPdfReport() {
         try {
+            if (lastRiskTitle.isBlank()) {
+                Toast.makeText(this, "Realize uma análise antes de gerar o PDF.", Toast.LENGTH_LONG).show()
+                return
+            }
+
             val pdfBytes = generatePdfBytes()
             pendingPdfBytes = pdfBytes
 
@@ -729,11 +832,7 @@ class AnaliseActivity : AppCompatActivity() {
             createPdfLauncher.launch(fileName)
 
         } catch (e: Exception) {
-            Toast.makeText(
-                this,
-                "Erro ao gerar PDF: ${e.message}",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Erro ao gerar PDF: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -803,6 +902,7 @@ class AnaliseActivity : AppCompatActivity() {
                 lastCancerPercent >= 40 -> Color.parseColor("#E6A23C")
                 else -> Color.parseColor("#5CB85C")
             }
+
             textSize = 36f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
@@ -839,26 +939,10 @@ class AnaliseActivity : AppCompatActivity() {
         }
 
         canvas.drawText("Análise ABCDE", 40f, 290f, subtitlePaint)
-
-        drawMultilineText(
-            canvas,
-            lastAbcdeReport,
-            40f,
-            315f,
-            normalPaint,
-            78
-        )
+        drawMultilineText(canvas, lastAbcdeReport, 40f, 315f, normalPaint, 78)
 
         canvas.drawText("Tamanho e diâmetro", 40f, 505f, subtitlePaint)
-
-        drawMultilineText(
-            canvas,
-            lastSizeReport,
-            40f,
-            530f,
-            normalPaint,
-            82
-        )
+        drawMultilineText(canvas, lastSizeReport, 40f, 530f, normalPaint, 82)
 
         canvas.drawText("Resultado detalhado da IA", 40f, 640f, subtitlePaint)
 
@@ -866,14 +950,7 @@ class AnaliseActivity : AppCompatActivity() {
             "Cancer: ${formatNumber(lastCancerPercent)}%\n" +
                     "Nao_Cancer: ${formatNumber(lastNaoCancerPercent)}%"
 
-        drawMultilineText(
-            canvas,
-            classText,
-            40f,
-            665f,
-            normalPaint,
-            80
-        )
+        drawMultilineText(canvas, classText, 40f, 665f, normalPaint, 80)
 
         canvas.drawText("Orientação para captura da imagem", 40f, 710f, subtitlePaint)
 
@@ -893,14 +970,7 @@ class AnaliseActivity : AppCompatActivity() {
                     "A análise é apenas uma triagem computacional baseada em imagem e no modelo treinado. " +
                     "Em caso de suspeita, mudança na pele, dor, sangramento, coceira ou crescimento da lesão, procure um dermatologista."
 
-        drawMultilineText(
-            canvas,
-            warning,
-            40f,
-            795f,
-            normalPaint,
-            90
-        )
+        drawMultilineText(canvas, warning, 40f, 795f, normalPaint, 90)
 
         canvas.drawText("Gerado pelo aplicativo DermaSkin", 40f, 830f, smallPaint)
     }
@@ -923,17 +993,17 @@ class AnaliseActivity : AppCompatActivity() {
                 var currentLine = ""
 
                 paragraph.split(" ").forEach { word ->
-                    if ((currentLine + " " + word).trim().length <= maxCharsPerLine) {
-                        currentLine = (currentLine + " " + word).trim()
+                    val testLine = (currentLine + " " + word).trim()
+
+                    if (testLine.length <= maxCharsPerLine) {
+                        currentLine = testLine
                     } else {
-                        lines.add(currentLine)
+                        if (currentLine.isNotBlank()) lines.add(currentLine)
                         currentLine = word
                     }
                 }
 
-                if (currentLine.isNotBlank()) {
-                    lines.add(currentLine)
-                }
+                if (currentLine.isNotBlank()) lines.add(currentLine)
             }
         }
 
@@ -974,6 +1044,8 @@ class AnaliseActivity : AppCompatActivity() {
         txtDescription.text = message
         txtClasses.text = ""
         txtABCDE.text = ""
+
         btnExportPdf.isEnabled = false
+        btnExportPdf.alpha = 0.55f
     }
 }

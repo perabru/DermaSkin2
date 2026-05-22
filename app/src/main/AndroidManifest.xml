@@ -22,9 +22,9 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.DermaSkin2"
         android:usesCleartextTraffic="true">
-
         <activity
             android:name=".AnaliseActivity"
+            android:hardwareAccelerated="false"
             android:exported="false" />
 
         <activity

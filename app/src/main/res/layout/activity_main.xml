@@ -1,164 +1,151 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:id="@+id/mainScroll"
+    android:id="@+id/rootLogin"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/cream"
+    android:background="#F4F8FB"
     android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:gravity="center_horizontal"
+        android:gravity="center"
         android:orientation="vertical"
         android:padding="24dp">
 
-        <TextView
-            android:id="@+id/txtAppName"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="DermaSkin"
-            android:textAlignment="center"
-            android:textColor="@color/brown_dark"
-            android:textSize="36sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/txtAppSubtitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Triagem inteligente de manchas na pele"
-            android:textAlignment="center"
-            android:textColor="@color/text_dark"
-            android:textSize="15sp" />
-
-        <ImageView
-            android:id="@+id/imgLogo"
-            android:layout_width="140dp"
-            android:layout_height="140dp"
-            android:layout_marginTop="28dp"
-            android:background="@drawable/bg_circle"
-            android:padding="26dp"
-            android:src="@drawable/ic_skin_placeholder" />
-
         <LinearLayout
-            android:id="@+id/cardAuth"
+            android:id="@+id/cardLogin"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="28dp"
-            android:background="@drawable/bg_card"
+            android:background="#FFFFFF"
+            android:elevation="4dp"
             android:orientation="vertical"
-            android:padding="20dp">
+            android:padding="24dp">
 
             <TextView
-                android:id="@+id/txtMode"
-                android:layout_width="match_parent"
+                android:id="@+id/txtAppName"
+                android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Criar conta"
-                android:textColor="@color/brown_dark"
-                android:textSize="24sp"
+                android:text="DermaSkin"
+                android:textColor="#0F3D57"
+                android:textSize="34sp"
                 android:textStyle="bold" />
 
             <TextView
-                android:id="@+id/txtModeDescription"
+                android:id="@+id/txtSubtitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:text="Cadastre-se para acessar a análise inteligente da sua pele."
-                android:textColor="@color/text_dark"
-                android:textSize="14sp" />
+                android:layout_marginTop="4dp"
+                android:text="Triagem visual com inteligencia artificial"
+                android:textColor="#607D8B"
+                android:textSize="15sp" />
+
+            <TextView
+                android:id="@+id/txtMode"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="32dp"
+                android:text="Criar conta"
+                android:textColor="#263238"
+                android:textSize="24sp"
+                android:textStyle="bold" />
 
             <EditText
                 android:id="@+id/edtName"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
                 android:layout_marginTop="18dp"
-                android:background="@drawable/bg_input"
+                android:background="#EEF4F7"
                 android:hint="Nome completo"
                 android:inputType="textPersonName"
-                android:padding="16dp"
-                android:textColor="@color/text_dark"
-                android:textColorHint="#8A6B5A"
-                android:textSize="15sp" />
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:textColor="#263238"
+                android:textColorHint="#78909C" />
 
             <EditText
                 android:id="@+id/edtEmail"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_input"
+                android:layout_marginTop="14dp"
+                android:background="#EEF4F7"
                 android:hint="E-mail"
                 android:inputType="textEmailAddress"
-                android:padding="16dp"
-                android:textColor="@color/text_dark"
-                android:textColorHint="#8A6B5A"
-                android:textSize="15sp" />
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:textColor="#263238"
+                android:textColorHint="#78909C" />
 
             <EditText
                 android:id="@+id/edtPassword"
                 android:layout_width="match_parent"
                 android:layout_height="56dp"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_input"
+                android:layout_marginTop="14dp"
+                android:background="#EEF4F7"
                 android:hint="Senha"
                 android:inputType="textPassword"
-                android:padding="16dp"
-                android:textColor="@color/text_dark"
-                android:textColorHint="#8A6B5A"
-                android:textSize="15sp" />
+                android:paddingLeft="16dp"
+                android:paddingRight="16dp"
+                android:textColor="#263238"
+                android:textColorHint="#78909C" />
 
             <CheckBox
                 android:id="@+id/checkTerms"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="14dp"
-                android:text="Entendo que o DermaSkin realiza apenas uma triagem por IA e não substitui consulta médica."
-                android:textColor="@color/text_dark"
+                android:layout_marginTop="16dp"
+                android:text="Aceito o aviso de triagem medica. Entendo que o app nao substitui consulta dermatologica."
+                android:textColor="#455A64"
                 android:textSize="13sp" />
-
-            <Button
-                android:id="@+id/btnRegister"
-                android:layout_width="match_parent"
-                android:layout_height="58dp"
-                android:layout_marginTop="18dp"
-                android:backgroundTint="@color/brown"
-                android:text="Criar conta"
-                android:textAllCaps="false"
-                android:textColor="#FFFFFF"
-                android:textSize="17sp" />
-
-            <Button
-                android:id="@+id/btnLogin"
-                android:layout_width="match_parent"
-                android:layout_height="56dp"
-                android:layout_marginTop="10dp"
-                android:backgroundTint="@color/soft_brown"
-                android:text="Já tenho conta"
-                android:textAllCaps="false"
-                android:textColor="@color/brown_dark"
-                android:textSize="16sp" />
 
             <ProgressBar
                 android:id="@+id/progressBar"
-                android:layout_width="40dp"
-                android:layout_height="40dp"
+                style="?android:attr/progressBarStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:layout_marginTop="18dp"
                 android:visibility="gone" />
 
-        </LinearLayout>
+            <TextView
+                android:id="@+id/btnRegister"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="22dp"
+                android:background="#0F8CA8"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="Criar conta"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold" />
 
-        <TextView
-            android:id="@+id/txtWarning"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="22dp"
-            android:text="Ao notar crescimento, sangramento, coceira, mudança de cor ou formato, procure um dermatologista."
-            android:textAlignment="center"
-            android:textColor="@color/text_dark"
-            android:textSize="13sp" />
+            <TextView
+                android:id="@+id/btnLogin"
+                android:layout_width="match_parent"
+                android:layout_height="56dp"
+                android:layout_marginTop="12dp"
+                android:background="#EAF8FB"
+                android:clickable="true"
+                android:focusable="true"
+                android:gravity="center"
+                android:text="Ja tenho conta"
+                android:textColor="#0F8CA8"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtWarning"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="22dp"
+                android:gravity="center"
+                android:text="Este aplicativo realiza apenas uma triagem visual. Em caso de suspeita, procure um dermatologista."
+                android:textColor="#78909C"
+                android:textSize="12sp" />
+
+        </LinearLayout>
 
     </LinearLayout>
 

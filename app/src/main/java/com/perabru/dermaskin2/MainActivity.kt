@@ -4,7 +4,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Patterns
 import android.view.View
-import android.widget.Button
 import android.widget.CheckBox
 import android.widget.EditText
 import android.widget.ProgressBar
@@ -12,6 +11,9 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseAuthInvalidCredentialsException
+import com.google.firebase.auth.FirebaseAuthInvalidUserException
+import com.google.firebase.auth.FirebaseAuthUserCollisionException
 import com.google.firebase.database.FirebaseDatabase
 
 class MainActivity : AppCompatActivity() {
@@ -23,18 +25,30 @@ class MainActivity : AppCompatActivity() {
     private lateinit var edtEmail: EditText
     private lateinit var edtPassword: EditText
     private lateinit var checkTerms: CheckBox
-    private lateinit var btnRegister: Button
-    private lateinit var btnLogin: Button
+    private lateinit var btnRegister: TextView
+    private lateinit var btnLogin: TextView
     private lateinit var progressBar: ProgressBar
 
     private var isLoginMode = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
         setContentView(R.layout.activity_main)
 
         auth = FirebaseAuth.getInstance()
 
+        iniciarComponentes()
+        configurarEstadoInicial()
+        configurarCliques()
+
+        val usuarioAtual = auth.currentUser
+        if (usuarioAtual != null) {
+            openAnaliseScreen()
+        }
+    }
+
+    private fun iniciarComponentes() {
         txtMode = findViewById(R.id.txtMode)
         edtName = findViewById(R.id.edtName)
         edtEmail = findViewById(R.id.edtEmail)
@@ -43,13 +57,14 @@ class MainActivity : AppCompatActivity() {
         btnRegister = findViewById(R.id.btnRegister)
         btnLogin = findViewById(R.id.btnLogin)
         progressBar = findViewById(R.id.progressBar)
+    }
 
+    private fun configurarEstadoInicial() {
         progressBar.visibility = View.GONE
+        changeToRegisterMode()
+    }
 
-        if (auth.currentUser != null) {
-            openAnaliseScreen()
-        }
-
+    private fun configurarCliques() {
         btnRegister.setOnClickListener {
             if (isLoginMode) {
                 changeToRegisterMode()
@@ -69,8 +84,10 @@ class MainActivity : AppCompatActivity() {
 
     private fun changeToLoginMode() {
         isLoginMode = true
+        limparErros()
 
         txtMode.text = "Entrar na conta"
+
         edtName.visibility = View.GONE
         checkTerms.visibility = View.GONE
 
@@ -80,12 +97,15 @@ class MainActivity : AppCompatActivity() {
         edtName.text.clear()
         edtEmail.text.clear()
         edtPassword.text.clear()
+        checkTerms.isChecked = false
     }
 
     private fun changeToRegisterMode() {
         isLoginMode = false
+        limparErros()
 
         txtMode.text = "Criar conta"
+
         edtName.visibility = View.VISIBLE
         checkTerms.visibility = View.VISIBLE
 
@@ -95,6 +115,7 @@ class MainActivity : AppCompatActivity() {
         edtName.text.clear()
         edtEmail.text.clear()
         edtPassword.text.clear()
+        checkTerms.isChecked = false
     }
 
     private fun registerUser() {
@@ -102,39 +123,8 @@ class MainActivity : AppCompatActivity() {
         val email = edtEmail.text.toString().trim()
         val password = edtPassword.text.toString().trim()
 
-        when {
-            name.isEmpty() -> {
-                edtName.error = "Informe seu nome"
-                edtName.requestFocus()
-                return
-            }
-
-            email.isEmpty() -> {
-                edtEmail.error = "Informe seu e-mail"
-                edtEmail.requestFocus()
-                return
-            }
-
-            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
-                edtEmail.error = "Informe um e-mail válido"
-                edtEmail.requestFocus()
-                return
-            }
-
-            password.length < 6 -> {
-                edtPassword.error = "A senha precisa ter pelo menos 6 caracteres"
-                edtPassword.requestFocus()
-                return
-            }
-
-            !checkTerms.isChecked -> {
-                Toast.makeText(
-                    this,
-                    "Você precisa aceitar o aviso de triagem médica.",
-                    Toast.LENGTH_LONG
-                ).show()
-                return
-            }
+        if (!validarCadastro(name, email, password)) {
+            return
         }
 
         setLoading(true)
@@ -143,32 +133,91 @@ class MainActivity : AppCompatActivity() {
             .addOnSuccessListener { result ->
                 val userId = result.user?.uid
 
-                if (userId != null) {
-                    saveUserData(userId, name, email)
-                } else {
+                if (userId.isNullOrEmpty()) {
                     setLoading(false)
                     Toast.makeText(
                         this,
                         "Erro ao obter ID do usuário.",
                         Toast.LENGTH_LONG
                     ).show()
+                    return@addOnSuccessListener
                 }
+
+                saveUserData(userId, name, email)
             }
             .addOnFailureListener { error ->
                 setLoading(false)
 
+                val message = when (error) {
+                    is FirebaseAuthUserCollisionException ->
+                        "Este e-mail já está cadastrado. Tente entrar na conta."
+
+                    is FirebaseAuthInvalidCredentialsException ->
+                        "E-mail inválido. Verifique e tente novamente."
+
+                    else ->
+                        "Erro ao criar conta: ${error.message}"
+                }
+
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+            }
+    }
+
+    private fun validarCadastro(
+        name: String,
+        email: String,
+        password: String
+    ): Boolean {
+        limparErros()
+
+        when {
+            name.isEmpty() -> {
+                edtName.error = "Informe seu nome"
+                edtName.requestFocus()
+                return false
+            }
+
+            email.isEmpty() -> {
+                edtEmail.error = "Informe seu e-mail"
+                edtEmail.requestFocus()
+                return false
+            }
+
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                edtEmail.error = "Informe um e-mail válido"
+                edtEmail.requestFocus()
+                return false
+            }
+
+            password.isEmpty() -> {
+                edtPassword.error = "Informe sua senha"
+                edtPassword.requestFocus()
+                return false
+            }
+
+            password.length < 6 -> {
+                edtPassword.error = "A senha precisa ter pelo menos 6 caracteres"
+                edtPassword.requestFocus()
+                return false
+            }
+
+            !checkTerms.isChecked -> {
                 Toast.makeText(
                     this,
-                    "Erro ao criar conta: ${error.message}",
+                    "Você precisa aceitar o aviso de triagem médica.",
                     Toast.LENGTH_LONG
                 ).show()
+                return false
             }
+        }
+
+        return true
     }
 
     private fun saveUserData(userId: String, name: String, email: String) {
         val database = FirebaseDatabase.getInstance().reference
 
-        val userData = mapOf(
+        val userData = hashMapOf(
             "id" to userId,
             "nome" to name,
             "email" to email,
@@ -206,24 +255,8 @@ class MainActivity : AppCompatActivity() {
         val email = edtEmail.text.toString().trim()
         val password = edtPassword.text.toString().trim()
 
-        when {
-            email.isEmpty() -> {
-                edtEmail.error = "Informe seu e-mail"
-                edtEmail.requestFocus()
-                return
-            }
-
-            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
-                edtEmail.error = "Informe um e-mail válido"
-                edtEmail.requestFocus()
-                return
-            }
-
-            password.isEmpty() -> {
-                edtPassword.error = "Informe sua senha"
-                edtPassword.requestFocus()
-                return
-            }
+        if (!validarLogin(email, password)) {
+            return
         }
 
         setLoading(true)
@@ -243,12 +276,45 @@ class MainActivity : AppCompatActivity() {
             .addOnFailureListener { error ->
                 setLoading(false)
 
-                Toast.makeText(
-                    this,
-                    "Erro ao entrar: ${error.message}",
-                    Toast.LENGTH_LONG
-                ).show()
+                val message = when (error) {
+                    is FirebaseAuthInvalidUserException ->
+                        "Usuário não encontrado. Crie uma conta primeiro."
+
+                    is FirebaseAuthInvalidCredentialsException ->
+                        "E-mail ou senha incorretos."
+
+                    else ->
+                        "Erro ao entrar: ${error.message}"
+                }
+
+                Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             }
+    }
+
+    private fun validarLogin(email: String, password: String): Boolean {
+        limparErros()
+
+        when {
+            email.isEmpty() -> {
+                edtEmail.error = "Informe seu e-mail"
+                edtEmail.requestFocus()
+                return false
+            }
+
+            !Patterns.EMAIL_ADDRESS.matcher(email).matches() -> {
+                edtEmail.error = "Informe um e-mail válido"
+                edtEmail.requestFocus()
+                return false
+            }
+
+            password.isEmpty() -> {
+                edtPassword.error = "Informe sua senha"
+                edtPassword.requestFocus()
+                return false
+            }
+        }
+
+        return true
     }
 
     private fun openAnaliseScreen() {
@@ -266,5 +332,14 @@ class MainActivity : AppCompatActivity() {
         edtEmail.isEnabled = !isLoading
         edtPassword.isEnabled = !isLoading
         checkTerms.isEnabled = !isLoading
+
+        btnRegister.alpha = if (isLoading) 0.55f else 1.0f
+        btnLogin.alpha = if (isLoading) 0.55f else 1.0f
+    }
+
+    private fun limparErros() {
+        edtName.error = null
+        edtEmail.error = null
+        edtPassword.error = null
     }
 }

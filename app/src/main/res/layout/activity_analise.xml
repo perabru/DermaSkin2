@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/rootAnalise"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/cream"
@@ -31,6 +32,20 @@
             android:textColor="@color/text_dark"
             android:textSize="15sp" />
 
+        <TextView
+            android:id="@+id/btnLogout"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:layout_marginTop="16dp"
+            android:background="@color/soft_brown"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
+            android:text="Sair da conta"
+            android:textColor="@color/brown_dark"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
         <ImageView
             android:id="@+id/imgPreview"
             android:layout_width="260dp"
@@ -38,6 +53,7 @@
             android:layout_gravity="center"
             android:layout_marginTop="28dp"
             android:background="@drawable/bg_circle"
+            android:contentDescription="Imagem capturada para análise"
             android:padding="8dp"
             android:scaleType="centerCrop"
             android:src="@drawable/ic_skin_placeholder" />
@@ -64,40 +80,51 @@
             android:textColor="@color/text_dark"
             android:textSize="14sp" />
 
-        <Button
+        <TextView
             android:id="@+id/btnCamera"
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="24dp"
-            android:backgroundTint="@color/brown"
+            android:background="@color/brown"
+            android:clickable="true"
+            android:focusable="true"
+            android:gravity="center"
             android:text="Tirar foto da mancha"
-            android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="17sp" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
-        <Button
+        <TextView
             android:id="@+id/btnAnalyze"
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="12dp"
-            android:backgroundTint="@color/brown_dark"
+            android:alpha="0.55"
+            android:background="@color/brown_dark"
+            android:clickable="true"
             android:enabled="false"
+            android:focusable="true"
+            android:gravity="center"
             android:text="Analisar com IA"
-            android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="17sp" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
-        <Button
+        <TextView
             android:id="@+id/btnExportPdf"
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="12dp"
-            android:backgroundTint="@color/soft_brown"
+            android:alpha="0.55"
+            android:background="@color/soft_brown"
+            android:clickable="true"
             android:enabled="false"
+            android:focusable="true"
+            android:gravity="center"
             android:text="Exportar relatório em PDF"
-            android:textAllCaps="false"
             android:textColor="@color/brown_dark"
-            android:textSize="16sp" />
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
         <ProgressBar
             android:id="@+id/progress"
