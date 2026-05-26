@@ -154,7 +154,7 @@
             android:layout_marginTop="12dp"
             android:backgroundTint="#E8C9B8"
             android:enabled="false"
-            android:text="Gerar PDF profissional"
+            android:text="Exportar Relatório"
             android:textAllCaps="false"
             android:textColor="#4A2A1A"
             android:textSize="16sp"
