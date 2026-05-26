@@ -34,6 +34,8 @@ import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.PI
+import kotlin.math.abs
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
 
@@ -42,18 +44,22 @@ class AnaliseActivity : AppCompatActivity() {
     private lateinit var auth: FirebaseAuth
 
     private lateinit var imgPreview: ImageView
+
     private lateinit var btnCamera: Button
     private lateinit var btnAnalyze: Button
     private lateinit var btnExportPdf: Button
     private lateinit var btnLogout: Button
 
     private lateinit var progress: ProgressBar
+
     private lateinit var riskCard: LinearLayout
+    private lateinit var sizeCard: LinearLayout
     private lateinit var resultCard: LinearLayout
 
     private lateinit var txtRiskTitle: TextView
     private lateinit var txtPercentage: TextView
     private lateinit var txtRiskExplanation: TextView
+    private lateinit var txtSizeReport: TextView
     private lateinit var txtDescription: TextView
     private lateinit var txtABCDE: TextView
     private lateinit var txtClasses: TextView
@@ -66,16 +72,22 @@ class AnaliseActivity : AppCompatActivity() {
 
     private var lastCancerPercent = 0.0
     private var lastNaoCancerPercent = 0.0
+
     private var lastRiskTitle = ""
     private var lastRiskExplanation = ""
     private var lastDescription = ""
     private var lastAbcdeReport = ""
+    private var lastSizeReport = ""
     private var lastClasses = ""
 
     private var lastAsymmetryScore = 0.0
     private var lastBorderScore = 0.0
     private var lastColorScore = 0.0
     private var lastEvolutionDetected = false
+
+    private var lastEstimatedAreaPixels = 0
+    private var lastEstimatedImagePercent = 0.0
+    private var lastEstimatedPixelDiameter = 0.0
 
     private var pendingPdfBytes: ByteArray? = null
 
@@ -124,6 +136,7 @@ class AnaliseActivity : AppCompatActivity() {
                 btnExportPdf.alpha = 0.55f
 
                 riskCard.visibility = View.GONE
+                sizeCard.visibility = View.GONE
                 resultCard.visibility = View.GONE
 
                 limparUltimosResultados()
@@ -167,18 +180,22 @@ class AnaliseActivity : AppCompatActivity() {
 
     private fun iniciarComponentes() {
         imgPreview = findViewById(R.id.imgPreview)
+
         btnCamera = findViewById(R.id.btnCamera)
         btnAnalyze = findViewById(R.id.btnAnalyze)
         btnExportPdf = findViewById(R.id.btnExportPdf)
         btnLogout = findViewById(R.id.btnLogout)
 
         progress = findViewById(R.id.progress)
+
         riskCard = findViewById(R.id.riskCard)
+        sizeCard = findViewById(R.id.sizeCard)
         resultCard = findViewById(R.id.resultCard)
 
         txtRiskTitle = findViewById(R.id.txtRiskTitle)
         txtPercentage = findViewById(R.id.txtPercentage)
         txtRiskExplanation = findViewById(R.id.txtRiskExplanation)
+        txtSizeReport = findViewById(R.id.txtSizeReport)
         txtDescription = findViewById(R.id.txtDescription)
         txtABCDE = findViewById(R.id.txtABCDE)
         txtClasses = findViewById(R.id.txtClasses)
@@ -189,7 +206,9 @@ class AnaliseActivity : AppCompatActivity() {
 
     private fun configurarEstadoInicial() {
         progress.visibility = View.GONE
+
         riskCard.visibility = View.GONE
+        sizeCard.visibility = View.GONE
         resultCard.visibility = View.GONE
 
         btnAnalyze.isEnabled = false
@@ -241,6 +260,7 @@ class AnaliseActivity : AppCompatActivity() {
             .setMessage("Deseja realmente sair e voltar para a tela de login?")
             .setPositiveButton("Sair") { _, _ ->
                 auth.signOut()
+                Toast.makeText(this, "Você saiu da conta.", Toast.LENGTH_SHORT).show()
                 voltarParaLogin()
             }
             .setNegativeButton("Cancelar", null)
@@ -257,16 +277,22 @@ class AnaliseActivity : AppCompatActivity() {
     private fun limparUltimosResultados() {
         lastCancerPercent = 0.0
         lastNaoCancerPercent = 0.0
+
         lastRiskTitle = ""
         lastRiskExplanation = ""
         lastDescription = ""
         lastAbcdeReport = ""
+        lastSizeReport = ""
         lastClasses = ""
 
         lastAsymmetryScore = 0.0
         lastBorderScore = 0.0
         lastColorScore = 0.0
         lastEvolutionDetected = false
+
+        lastEstimatedAreaPixels = 0
+        lastEstimatedImagePercent = 0.0
+        lastEstimatedPixelDiameter = 0.0
 
         pendingPdfBytes = null
     }
@@ -275,11 +301,13 @@ class AnaliseActivity : AppCompatActivity() {
         AlertDialog.Builder(this)
             .setTitle("Foto ideal para análise")
             .setMessage(
-                "Para uma análise mais confiável:\n\n" +
+                "Para melhorar a análise:\n\n" +
+                        "• Posicione a mancha no centro da imagem.\n" +
                         "• Use boa iluminação.\n" +
                         "• Evite sombra e flash direto.\n" +
-                        "• Centralize bem a mancha na imagem.\n" +
-                        "• Mantenha a câmera firme.\n\n" +
+                        "• Mantenha a câmera firme.\n" +
+                        "• Aproxime a câmera sem perder o foco.\n\n" +
+                        "A marcação circular da tela serve como guia para centralizar a mancha antes da foto.\n\n" +
                         "A análise é apenas uma triagem e não substitui avaliação médica."
             )
             .setPositiveButton("Tirar foto") { _, _ ->
@@ -394,7 +422,9 @@ class AnaliseActivity : AppCompatActivity() {
 
     private fun analyzeImage(bitmap: Bitmap) {
         progress.visibility = View.VISIBLE
+
         riskCard.visibility = View.GONE
+        sizeCard.visibility = View.GONE
         resultCard.visibility = View.GONE
 
         btnAnalyze.isEnabled = false
@@ -494,7 +524,7 @@ class AnaliseActivity : AppCompatActivity() {
 
                 when (className) {
                     "cancer" -> cancerProbability = probability
-                    "naocancer", "naocancer", "naocancer" -> naoCancerProbability = probability
+                    "naocancer" -> naoCancerProbability = probability
                 }
             }
 
@@ -506,10 +536,13 @@ class AnaliseActivity : AppCompatActivity() {
             lastClasses = allResults.toString()
 
             val bitmap = currentBitmap
+
             if (bitmap != null) {
                 lastAbcdeReport = generateABCDEAnalysis(bitmap)
+                lastSizeReport = generateSizeAnalysis(bitmap)
             } else {
                 lastAbcdeReport = "Não foi possível calcular a análise visual sem imagem."
+                lastSizeReport = "Não foi possível calcular o tamanho aproximado sem imagem."
             }
 
             definirRisco(cancerPercent)
@@ -517,6 +550,9 @@ class AnaliseActivity : AppCompatActivity() {
             txtRiskTitle.text = lastRiskTitle
             txtPercentage.text = "${formatNumber(cancerPercent)}%"
             txtRiskExplanation.text = lastRiskExplanation
+
+            txtSizeReport.text = lastSizeReport
+
             txtDescription.text = lastDescription
             txtABCDE.text = lastAbcdeReport
 
@@ -527,6 +563,7 @@ class AnaliseActivity : AppCompatActivity() {
                         "Retorno original do modelo:\n$allResults"
 
             riskCard.visibility = View.VISIBLE
+            sizeCard.visibility = View.VISIBLE
             resultCard.visibility = View.VISIBLE
 
             btnExportPdf.isEnabled = true
@@ -544,46 +581,150 @@ class AnaliseActivity : AppCompatActivity() {
             "Não foi marcada evolução recente da mancha, o que reduz um pouco o nível de alerta visual."
         }
 
+        val sizeText = when {
+            lastEstimatedImagePercent >= 25.0 ->
+                "A mancha também ocupou uma área visual grande dentro da foto."
+
+            lastEstimatedImagePercent >= 10.0 ->
+                "A mancha ocupou uma área visual moderada dentro da foto."
+
+            lastEstimatedImagePercent > 0.0 ->
+                "A mancha ocupou uma área visual pequena dentro da foto."
+
+            else ->
+                "O tamanho visual da mancha não pôde ser estimado com segurança."
+        }
+
         when {
             cancerPercent >= 70.0 -> {
                 lastRiskTitle = "Risco alto"
+
                 lastDescription =
                     "A imagem apresentou alta compatibilidade com a classe Cancer no modelo de inteligência artificial. Esse resultado não confirma diagnóstico, mas indica necessidade de avaliação dermatológica."
 
                 lastRiskExplanation =
                     "O risco foi considerado alto porque a IA atribuiu ${formatNumber(cancerPercent)}% de compatibilidade com a classe Cancer. " +
-                            "Na análise visual complementar, foram observados indicadores como assimetria, bordas, variação de cor e evolução relatada. " +
-                            "$evolutionText\n\nProcure um dermatologista o quanto antes para avaliação profissional."
+                            "Também foram avaliados sinais visuais como assimetria, bordas, variação de cor, evolução relatada e área aproximada da mancha. " +
+                            "$evolutionText $sizeText\n\n" +
+                            "Procure um dermatologista o quanto antes para avaliação profissional."
 
                 txtPercentage.setTextColor(Color.parseColor("#D9534F"))
             }
 
             cancerPercent >= 40.0 -> {
                 lastRiskTitle = "Risco médio"
+
                 lastDescription =
                     "A imagem apresentou compatibilidade intermediária com a classe Cancer. Isso significa que existem sinais visuais que merecem atenção, mas que não podem ser interpretados como diagnóstico."
 
                 lastRiskExplanation =
                     "O risco foi considerado médio porque a IA encontrou ${formatNumber(cancerPercent)}% de compatibilidade com a classe Cancer. " +
-                            "Esse percentual indica dúvida visual do modelo, principalmente quando combinado com alterações de cor, borda, assimetria ou evolução. " +
-                            "$evolutionText\n\nRecomenda-se acompanhar a lesão e buscar avaliação médica."
+                            "Esse percentual indica dúvida visual do modelo, principalmente quando combinado com alterações de cor, borda, assimetria, evolução ou tamanho visual da mancha. " +
+                            "$evolutionText $sizeText\n\n" +
+                            "Recomenda-se acompanhar a lesão e buscar avaliação médica."
 
                 txtPercentage.setTextColor(Color.parseColor("#E6A23C"))
             }
 
             else -> {
                 lastRiskTitle = "Risco baixo"
+
                 lastDescription =
                     "A imagem apresentou baixa compatibilidade com a classe Cancer no modelo de inteligência artificial. Mesmo assim, qualquer mudança na pele deve ser observada."
 
                 lastRiskExplanation =
                     "O risco foi considerado baixo porque a IA atribuiu apenas ${formatNumber(cancerPercent)}% de compatibilidade com a classe Cancer. " +
-                            "A análise visual complementar não substitui um exame médico, mas ajuda a organizar sinais como assimetria, bordas, cor e evolução. " +
-                            "$evolutionText\n\nSe a mancha mudar, coçar, sangrar ou crescer, procure um dermatologista."
+                            "A análise complementar observou assimetria, bordas, cor, evolução e tamanho visual aproximado. " +
+                            "$evolutionText $sizeText\n\n" +
+                            "Se a mancha mudar, coçar, sangrar ou crescer, procure um dermatologista."
 
                 txtPercentage.setTextColor(Color.parseColor("#5CB85C"))
             }
         }
+    }
+
+    private fun generateSizeAnalysis(bitmap: Bitmap): String {
+        val resized = Bitmap.createScaledBitmap(bitmap, 224, 224, true)
+
+        val lesionPixels = estimateLesionAreaPixels(resized)
+        val totalPixels = resized.width * resized.height
+
+        val imagePercent = if (totalPixels > 0) {
+            (lesionPixels.toDouble() / totalPixels.toDouble()) * 100.0
+        } else {
+            0.0
+        }
+
+        val pixelDiameter = if (lesionPixels > 0) {
+            2.0 * sqrt(lesionPixels.toDouble() / PI)
+        } else {
+            0.0
+        }
+
+        lastEstimatedAreaPixels = lesionPixels
+        lastEstimatedImagePercent = imagePercent
+        lastEstimatedPixelDiameter = pixelDiameter
+
+        val classification = when {
+            imagePercent >= 25.0 ->
+                "A mancha ocupa uma área grande dentro da imagem capturada."
+
+            imagePercent >= 10.0 ->
+                "A mancha ocupa uma área moderada dentro da imagem capturada."
+
+            imagePercent > 0.0 ->
+                "A mancha ocupa uma área pequena dentro da imagem capturada."
+
+            else ->
+                "Não foi possível estimar a área da mancha com segurança."
+        }
+
+        return """
+            Área visual estimada: $lesionPixels pixels.
+            Ocupação aproximada na foto: ${formatNumber(imagePercent)}%.
+            Diâmetro visual aproximado: ${formatNumber(pixelDiameter)} pixels.
+            
+            Interpretação:
+            $classification
+            
+            Observação:
+            Esse cálculo é aproximado e depende da distância da câmera, iluminação, foco e centralização da imagem. Para medir em milímetros com precisão, seria necessário usar uma régua, moeda ou objeto de referência na foto.
+        """.trimIndent()
+    }
+
+    private fun estimateLesionAreaPixels(bitmap: Bitmap): Int {
+        val width = bitmap.width
+        val height = bitmap.height
+
+        var totalBrightness = 0.0
+        var count = 0
+
+        for (y in 0 until height step 2) {
+            for (x in 0 until width step 2) {
+                totalBrightness += brightness(bitmap.getPixel(x, y))
+                count++
+            }
+        }
+
+        val averageBrightness = if (count > 0) {
+            totalBrightness / count
+        } else {
+            0.0
+        }
+
+        val threshold = averageBrightness - 20.0
+
+        var lesionPixels = 0
+
+        for (y in 0 until height) {
+            for (x in 0 until width) {
+                if (brightness(bitmap.getPixel(x, y)) < threshold) {
+                    lesionPixels++
+                }
+            }
+        }
+
+        return lesionPixels
     }
 
     private fun generateABCDEAnalysis(bitmap: Bitmap): String {
@@ -635,9 +776,14 @@ class AnaliseActivity : AppCompatActivity() {
         )
 
         val recommendation = when {
-            score >= 4 -> "Atenção alta: a combinação dos sinais visuais sugere buscar avaliação dermatológica o quanto antes."
-            score >= 2 -> "Atenção moderada: acompanhe a lesão e considere procurar um dermatologista."
-            else -> "Atenção baixa: mantenha observação e procure um médico se houver mudanças."
+            score >= 4 ->
+                "Atenção alta: a combinação dos sinais visuais sugere buscar avaliação dermatológica o quanto antes."
+
+            score >= 2 ->
+                "Atenção moderada: acompanhe a lesão e considere procurar um dermatologista."
+
+            else ->
+                "Atenção baixa: mantenha observação e procure um médico se houver mudanças."
         }
 
         return """
@@ -646,7 +792,7 @@ class AnaliseActivity : AppCompatActivity() {
             A - Assimetria: $asymmetryResult.
             B - Bordas: $borderResult.
             C - Cor: $colorResult.
-            D - Diâmetro: não avaliado automaticamente.
+            D - Diâmetro: estimado visualmente no card de tamanho.
             E - Evolução: $evolutionResult.
             
             Pontuação visual estimada: $score/4
@@ -704,7 +850,7 @@ class AnaliseActivity : AppCompatActivity() {
                 val right = brightness(bitmap.getPixel(x + 1, y))
                 val bottom = brightness(bitmap.getPixel(x, y + 1))
 
-                if (kotlin.math.abs(center - right) > 45 || kotlin.math.abs(center - bottom) > 45) {
+                if (abs(center - right) > 45 || abs(center - bottom) > 45) {
                     edgeChanges++
                 }
 
@@ -834,13 +980,13 @@ class AnaliseActivity : AppCompatActivity() {
 
         val normalPaint = Paint().apply {
             color = Color.parseColor("#2E1B13")
-            textSize = 11.5f
+            textSize = 10.5f
             isAntiAlias = true
         }
 
         val smallPaint = Paint().apply {
             color = Color.DKGRAY
-            textSize = 9.5f
+            textSize = 9f
             isAntiAlias = true
         }
 
@@ -870,109 +1016,128 @@ class AnaliseActivity : AppCompatActivity() {
                 else -> Color.parseColor("#5CB85C")
             }
 
-            textSize = 40f
+            textSize = 38f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
             isAntiAlias = true
         }
 
         canvas.drawColor(Color.parseColor("#F7EFE8"))
 
-        canvas.drawRoundRect(30f, 30f, pageWidth - 30f, 120f, 24f, 24f, whitePaint)
-        canvas.drawText("DermaSkin", 50f, 68f, titlePaint)
-        canvas.drawText("Relatório profissional de triagem visual com inteligência artificial", 50f, 94f, subtitlePaint)
+        canvas.drawRoundRect(30f, 30f, pageWidth - 30f, 115f, 24f, 24f, whitePaint)
+        canvas.drawText("DermaSkin", 50f, 66f, titlePaint)
+        canvas.drawText("Relatório profissional de triagem visual com inteligência artificial", 50f, 92f, subtitlePaint)
 
         val date = SimpleDateFormat("dd/MM/yyyy HH:mm", Locale("pt", "BR")).format(Date())
-        canvas.drawText("Data da análise: $date", 390f, 68f, smallPaint)
+        canvas.drawText("Data: $date", 420f, 66f, smallPaint)
 
-        canvas.drawRoundRect(30f, 140f, pageWidth - 30f, 280f, 24f, 24f, creamPaint)
-        canvas.drawRoundRect(30f, 140f, pageWidth - 30f, 280f, 24f, 24f, borderPaint)
+        canvas.drawRoundRect(30f, 135f, pageWidth - 30f, 255f, 24f, 24f, creamPaint)
+        canvas.drawRoundRect(30f, 135f, pageWidth - 30f, 255f, 24f, 24f, borderPaint)
 
-        canvas.drawText("Chance de risco", 50f, 170f, subtitlePaint)
-        canvas.drawText(lastRiskTitle, 50f, 205f, titlePaint)
-        canvas.drawText("${formatNumber(lastCancerPercent)}%", 390f, 210f, riskPaint)
+        canvas.drawText("Chance de risco", 50f, 165f, subtitlePaint)
+        canvas.drawText(lastRiskTitle, 50f, 200f, titlePaint)
+        canvas.drawText("${formatNumber(lastCancerPercent)}%", 390f, 205f, riskPaint)
 
         drawMultilineText(
             canvas,
             lastRiskExplanation,
             50f,
-            235f,
+            225f,
             normalPaint,
-            82
+            92
         )
 
-        canvas.drawRoundRect(30f, 300f, pageWidth - 30f, 535f, 24f, 24f, whitePaint)
-        canvas.drawRoundRect(30f, 300f, pageWidth - 30f, 535f, 24f, 24f, borderPaint)
+        canvas.drawRoundRect(30f, 275f, pageWidth - 30f, 425f, 24f, 24f, whitePaint)
+        canvas.drawRoundRect(30f, 275f, pageWidth - 30f, 425f, 24f, 24f, borderPaint)
 
-        canvas.drawText("Resultado da análise", 50f, 330f, subtitlePaint)
+        canvas.drawText("Tamanho aproximado da mancha", 50f, 305f, subtitlePaint)
+
+        val sizePdfText =
+            "Área visual estimada: $lastEstimatedAreaPixels pixels.\n" +
+                    "Ocupação aproximada na foto: ${formatNumber(lastEstimatedImagePercent)}%.\n" +
+                    "Diâmetro visual aproximado: ${formatNumber(lastEstimatedPixelDiameter)} pixels.\n" +
+                    "Observação: estimativa dependente de distância, iluminação, foco e centralização."
+
+        drawMultilineText(
+            canvas,
+            sizePdfText,
+            50f,
+            330f,
+            normalPaint,
+            88
+        )
+
+        currentBitmap?.let { bitmap ->
+            val image = Bitmap.createScaledBitmap(bitmap, 105, 105, true)
+            canvas.drawBitmap(image, 430f, 305f, null)
+            canvas.drawText("Imagem analisada", 430f, 420f, smallPaint)
+        }
+
+        canvas.drawRoundRect(30f, 445f, pageWidth - 30f, 620f, 24f, 24f, creamPaint)
+        canvas.drawRoundRect(30f, 445f, pageWidth - 30f, 620f, 24f, 24f, borderPaint)
+
+        canvas.drawText("Resultado da análise", 50f, 475f, subtitlePaint)
 
         drawMultilineText(
             canvas,
             lastDescription,
             50f,
-            355f,
+            500f,
             normalPaint,
-            80
+            88
         )
 
-        canvas.drawText("Análise visual complementar", 50f, 430f, subtitlePaint)
+        canvas.drawText("Análise visual complementar", 50f, 565f, subtitlePaint)
 
         drawMultilineText(
             canvas,
             lastAbcdeReport,
             50f,
-            455f,
+            590f,
             normalPaint,
-            80
+            88
         )
 
-        currentBitmap?.let { bitmap ->
-            val image = Bitmap.createScaledBitmap(bitmap, 120, 120, true)
-            canvas.drawBitmap(image, 415f, 335f, null)
-            canvas.drawText("Imagem analisada", 418f, 470f, smallPaint)
-        }
+        canvas.drawRoundRect(30f, 640f, pageWidth - 30f, 735f, 24f, 24f, whitePaint)
+        canvas.drawRoundRect(30f, 640f, pageWidth - 30f, 735f, 24f, 24f, borderPaint)
 
-        canvas.drawRoundRect(30f, 555f, pageWidth - 30f, 700f, 24f, 24f, creamPaint)
-        canvas.drawRoundRect(30f, 555f, pageWidth - 30f, 700f, 24f, 24f, borderPaint)
-
-        canvas.drawText("Resultado detalhado do modelo", 50f, 585f, subtitlePaint)
+        canvas.drawText("Resultado detalhado do modelo", 50f, 670f, subtitlePaint)
 
         val detailText =
-            "Classe Cancer: ${formatNumber(lastCancerPercent)}%\n" +
-                    "Classe Nao_Cancer: ${formatNumber(lastNaoCancerPercent)}%\n\n" +
-                    "Assimetria visual: ${formatNumber(lastAsymmetryScore)} pontos\n" +
-                    "Bordas: ${formatNumber(lastBorderScore)} pontos\n" +
-                    "Variação de cor: ${formatNumber(lastColorScore)} pontos\n" +
+            "Classe Cancer: ${formatNumber(lastCancerPercent)}% | " +
+                    "Classe Nao_Cancer: ${formatNumber(lastNaoCancerPercent)}%\n" +
+                    "Assimetria: ${formatNumber(lastAsymmetryScore)} pontos | " +
+                    "Bordas: ${formatNumber(lastBorderScore)} pontos | " +
+                    "Cor: ${formatNumber(lastColorScore)} pontos\n" +
                     "Evolução relatada: ${if (lastEvolutionDetected) "sim" else "não"}"
 
         drawMultilineText(
             canvas,
             detailText,
             50f,
-            610f,
+            695f,
             normalPaint,
-            80
+            90
         )
 
-        canvas.drawRoundRect(30f, 720f, pageWidth - 30f, 810f, 24f, 24f, whitePaint)
-        canvas.drawRoundRect(30f, 720f, pageWidth - 30f, 810f, 24f, 24f, borderPaint)
+        canvas.drawRoundRect(30f, 755f, pageWidth - 30f, 815f, 24f, 24f, creamPaint)
+        canvas.drawRoundRect(30f, 755f, pageWidth - 30f, 815f, 24f, 24f, borderPaint)
 
-        canvas.drawText("Observação importante", 50f, 750f, subtitlePaint)
+        canvas.drawText("Observação importante", 50f, 780f, subtitlePaint)
 
         val warning =
             "Este relatório não possui valor diagnóstico e não substitui consulta médica. " +
-                    "A análise é uma triagem computacional baseada em imagem e no modelo treinado. " +
                     "Em caso de suspeita, mudança, dor, sangramento, coceira ou crescimento da lesão, procure um dermatologista."
 
         drawMultilineText(
             canvas,
             warning,
             50f,
-            775f,
+            802f,
             normalPaint,
-            86
+            92
         )
 
-        canvas.drawText("Gerado pelo aplicativo DermaSkin", 40f, 832f, smallPaint)
+        canvas.drawText("Gerado pelo aplicativo DermaSkin", 40f, 835f, smallPaint)
     }
 
     private fun drawMultilineText(
@@ -1009,7 +1174,7 @@ class AnaliseActivity : AppCompatActivity() {
 
         for (line in lines) {
             canvas.drawText(line, x, y, paint)
-            y += 15f
+            y += 14f
         }
     }
 
@@ -1039,6 +1204,7 @@ class AnaliseActivity : AppCompatActivity() {
         progress.visibility = View.GONE
 
         riskCard.visibility = View.VISIBLE
+        sizeCard.visibility = View.GONE
         resultCard.visibility = View.VISIBLE
 
         txtRiskTitle.text = "Atenção"
