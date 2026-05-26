@@ -3,7 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@color/cream"
+    android:background="#F7EFE8"
     android:fillViewport="true">
 
     <LinearLayout
@@ -13,93 +13,108 @@
         android:padding="22dp"
         tools:ignore="WebViewLayout">
 
-        <TextView
-            android:id="@+id/txtTitle"
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="DermaSkin"
-            android:textAlignment="center"
-            android:textColor="@color/brown_dark"
-            android:textSize="34sp"
-            android:textStyle="bold" />
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/txtSubtitle"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Análise inteligente de manchas na pele"
-            android:textAlignment="center"
-            android:textColor="@color/text_dark"
-            android:textSize="15sp" />
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/txtTitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="DermaSkin"
+                    android:textColor="#4A2A1A"
+                    android:textSize="34sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/txtSubtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Triagem visual inteligente da pele"
+                    android:textColor="#6B4A3A"
+                    android:textSize="15sp" />
+
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/btnLogout"
+                android:layout_width="90dp"
+                android:layout_height="46dp"
+                android:backgroundTint="#F1D8CC"
+                android:text="Sair"
+                android:textAllCaps="false"
+                android:textColor="#7A2E1D"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
 
         <ImageView
             android:id="@+id/imgPreview"
             android:layout_width="260dp"
             android:layout_height="260dp"
             android:layout_gravity="center"
-            android:layout_marginTop="28dp"
+            android:layout_marginTop="26dp"
             android:background="@drawable/bg_circle"
             android:padding="8dp"
             android:scaleType="centerCrop"
             android:src="@drawable/ic_skin_placeholder" />
 
-        <EditText
-            android:id="@+id/edtDiameter"
-            android:layout_width="match_parent"
-            android:layout_height="58dp"
-            android:layout_marginTop="22dp"
-            android:background="@drawable/bg_card"
-            android:hint="Diâmetro aproximado em mm. Ex: 7"
-            android:inputType="numberDecimal"
-            android:padding="16dp"
-            android:textColor="@color/text_dark"
-            android:textColorHint="#8A6B5A"
-            android:textSize="15sp" />
-
         <CheckBox
             android:id="@+id/checkEvolution"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:text="A mancha mudou de tamanho, cor, formato ou começou a coçar/sangrar?"
-            android:textColor="@color/text_dark"
+            android:layout_marginTop="18dp"
+            android:text="A mancha mudou de cor, formato, coçou, sangrou ou cresceu recentemente?"
+            android:textColor="#3A2A24"
             android:textSize="14sp" />
 
         <Button
             android:id="@+id/btnCamera"
             android:layout_width="match_parent"
             android:layout_height="58dp"
-            android:layout_marginTop="24dp"
-            android:backgroundTint="@color/brown"
+            android:layout_marginTop="22dp"
+            android:backgroundTint="#8B4A2F"
             android:text="Tirar foto da mancha"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="17sp" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/btnAnalyze"
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="12dp"
-            android:backgroundTint="@color/brown_dark"
+            android:backgroundTint="#4A2A1A"
             android:enabled="false"
             android:text="Analisar com IA"
             android:textAllCaps="false"
             android:textColor="#FFFFFF"
-            android:textSize="17sp" />
+            android:textSize="17sp"
+            android:textStyle="bold" />
 
         <Button
             android:id="@+id/btnExportPdf"
             android:layout_width="match_parent"
             android:layout_height="58dp"
             android:layout_marginTop="12dp"
-            android:backgroundTint="@color/soft_brown"
+            android:backgroundTint="#E8C9B8"
             android:enabled="false"
-            android:text="Exportar relatório em PDF"
+            android:text="Exportar Relatório"
             android:textAllCaps="false"
-            android:textColor="@color/brown_dark"
-            android:textSize="16sp" />
+            android:textColor="#4A2A1A"
+            android:textSize="16sp"
+            android:textStyle="bold" />
 
         <ProgressBar
             android:id="@+id/progress"
@@ -110,62 +125,94 @@
             android:visibility="gone" />
 
         <LinearLayout
-            android:id="@+id/resultCard"
+            android:id="@+id/riskCard"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="24dp"
+            android:layout_marginTop="26dp"
             android:background="@drawable/bg_card"
+            android:elevation="5dp"
             android:orientation="vertical"
-            android:padding="20dp"
+            android:padding="22dp"
             android:visibility="gone">
+
+            <TextView
+                android:id="@+id/txtRiskLabel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Chance de risco"
+                android:textColor="#8B4A2F"
+                android:textSize="15sp"
+                android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/txtRiskTitle"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="Resultado"
-                android:textAlignment="center"
-                android:textColor="@color/brown_dark"
-                android:textSize="24sp"
+                android:layout_marginTop="6dp"
+                android:text="Risco baixo"
+                android:textColor="#4A2A1A"
+                android:textSize="28sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/txtPercentage"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
+                android:layout_marginTop="8dp"
                 android:text="0%"
-                android:textAlignment="center"
-                android:textColor="@color/danger"
-                android:textSize="42sp"
+                android:textColor="#5CB85C"
+                android:textSize="48sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/txtRiskExplanation"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="4dp"
+                android:text="Explicação do risco"
+                android:textColor="#3A2A24"
+                android:textSize="15sp" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/resultCard"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:background="@drawable/bg_card"
+            android:elevation="5dp"
+            android:orientation="vertical"
+            android:padding="22dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/txtResultTitle"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="Resultado da análise"
+                android:textColor="#4A2A1A"
+                android:textSize="23sp"
                 android:textStyle="bold" />
 
             <TextView
                 android:id="@+id/txtDescription"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
+                android:layout_marginTop="10dp"
+                android:lineSpacingExtra="4dp"
                 android:text="Descrição do resultado"
-                android:textAlignment="center"
-                android:textColor="@color/text_dark"
-                android:textSize="16sp" />
-
-            <TextView
-                android:id="@+id/txtAbcdeTitle"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="22dp"
-                android:text="Análise ABCDE"
-                android:textColor="@color/brown_dark"
-                android:textSize="20sp"
-                android:textStyle="bold" />
+                android:textColor="#3A2A24"
+                android:textSize="15sp" />
 
             <TextView
                 android:id="@+id/txtABCDE"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="10dp"
-                android:textColor="@color/text_dark"
+                android:layout_marginTop="18dp"
+                android:lineSpacingExtra="4dp"
+                android:textColor="#3A2A24"
                 android:textSize="15sp" />
 
             <TextView
@@ -173,7 +220,9 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="18dp"
-                android:textColor="@color/text_dark"
+                android:background="#FFF8F2"
+                android:padding="14dp"
+                android:textColor="#3A2A24"
                 android:textSize="14sp" />
 
         </LinearLayout>
@@ -183,9 +232,10 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="22dp"
-            android:text="Atenção: este aplicativo não substitui consulta médica. A análise é apenas uma triagem por inteligência artificial."
+            android:lineSpacingExtra="3dp"
+            android:text="Atenção: este aplicativo não substitui consulta médica. A análise é apenas uma triagem visual por inteligência artificial."
             android:textAlignment="center"
-            android:textColor="@color/text_dark"
+            android:textColor="#6B4A3A"
             android:textSize="13sp" />
 
         <WebView
